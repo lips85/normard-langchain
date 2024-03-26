@@ -1,6 +1,7 @@
 # virtualenv
 .venv/
 .env
+README.md
 
 
 # Byte-compiled / optimized / DLL files
