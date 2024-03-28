@@ -20,6 +20,7 @@ networkx = "^3.2.1"
 langchain-core = "^0.1.33"
 langchain-community = "^0.0.29"
 streamlit = "^1.32.2"
+transformers = "^4.39.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"
