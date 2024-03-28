@@ -22,6 +22,8 @@ langchain-community = "^0.0.29"
 streamlit = "^1.32.2"
 transformers = "^4.39.1"
 tensorflow = "^2.16.1"
+jupyter = "^1.0.0"
+ipywidgets = "^8.1.2"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"
