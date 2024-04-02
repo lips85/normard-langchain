@@ -28,6 +28,7 @@ unstructured = "^0.12.6"
 chromadb = "^0.4.24"
 langcodes = "^3.3.0"
 faiss-cpu = "^1.8.0"
+watchdog = "^4.0.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.2.0"
