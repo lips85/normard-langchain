@@ -5,37 +5,18 @@ description = ""
 authors = ["haru <88703915+lips85@users.noreply.github.com>"]
 license = "MIT"
 readme = "README.md"
-package-mode = false
 
 [tool.poetry.dependencies]
-aiohttp = "^3.9.3"
-fastapi = "^0.110.0"
-python = "~3.11"
-langchain = "^0.1.10"
-tiktoken = "^0.6.0"
-python-dotenv = "^1.0.1"
-openai = "^1.13.3"
-langchain-openai = "^0.0.8"
-networkx = "^3.2.1"
-langchain-core = "^0.1.33"
-langchain-community = "^0.0.29"
+python = "3.11.8"
+langchain = "^0.1.14"
 streamlit = "^1.32.2"
-transformers = "^4.39.1"
-tensorflow = "^2.16.1"
+langsmith = "^0.1.39"
 jupyter = "^1.0.0"
-ipywidgets = "^8.1.2"
-unstructured = "^0.12.6"
-chromadb = "^0.4.24"
-langcodes = "^3.3.0"
-faiss-cpu = "^1.8.0"
-watchdog = "^4.0.0"
+langchain-openai = "^0.1.1"
+
 
 [tool.poetry.group.dev.dependencies]
-black = "^24.2.0"
-ruff = "^0.3.0"
-ipykernel = "^6.29.3"
-
-
+ipykernel = "^6.29.4"
 
 [build-system]
 requires = ["poetry-core"]
