@@ -1,16 +1,12 @@
-import time
 import streamlit as st
-
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.document_loaders.unstructured import UnstructuredFileLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
 from langchain.embeddings.cache import CacheBackedEmbeddings
-from langchain.vectorstores.faiss import FAISS
+from langchain_community.vectorstores.faiss import FAISS
 from langchain.storage import LocalFileStore
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.prompts import ChatPromptTemplate
 from langchain.schema.runnable import RunnablePassthrough, RunnableLambda
-from langchain.memory import ConversationBufferMemory
 from langchain_core.callbacks import BaseCallbackHandler
 
 # 시험 결과 embedding, llm 성능 모두 openai가 더 좋았음
@@ -69,7 +65,7 @@ llm = ChatOpenAI(
 )
 
 
-@st.cache_data(show_spinner="Embedding file...")
+@st.cache_resource(show_spinner="Embedding file...")
 def embed_file(file):
     file_content = file.read()
     file_path = f"./.cache/files/{file.name}"
@@ -114,6 +110,11 @@ def format_docs(docs):
     return "\n\n".join(document.page_content for document in docs)
 
 
+def save_api_key(api_key):
+    st.session_state["api_key"] = api_key
+    st.session_state["api_key_bool"] = True
+
+
 prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -130,39 +131,6 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 
-def invoke_chain(question):
-    result = chain.invoke(question).content
-    memory.save_context(
-        {"input": question},
-        {"output": result},
-    )
-    print(result)
-
-
-for message in st.session_state["messages"]:
-    send_message(
-        message["message"],
-        message["role"],
-        save=False,
-    )
-
-
-message = st.chat_input("Send a message to the ai ")
-
-if message:
-    send_message(message, "human")
-    time.sleep(2)
-    send_message(f"You said: {message}", "ai")
-
-    with st.sidebar:
-        st.write(st.session_state)
-
-
-def save_api_key(api_key):
-    st.session_state["api_key"] = api_key
-    st.session_state["api_key_bool"] = True
-
-
 with st.sidebar:
     file = st.file_uploader(
         "Upload a .txt .pdf or .docx file",
@@ -171,9 +139,10 @@ with st.sidebar:
 
 with st.sidebar:
     api_key = st.text_input(
-        "OPENAI_API_KEY를 넣어야 작동합니다.",
+        "API_KEY 입력",
+        placeholder="OPENAI_API_KEY를 입력하세요",
         disabled=st.session_state["api_key"] is not None,
-    ).strip()
+    )
 
     if api_key:
         save_api_key(api_key)
@@ -184,7 +153,7 @@ with st.sidebar:
     if button:
         save_api_key(api_key)
         if api_key == "":
-            st.write("API_KEY를 넣어주세요.")
+            st.write("OPENAI_API_KEY를 넣어주세요.")
 
 
 with st.sidebar:
