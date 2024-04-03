@@ -65,7 +65,7 @@ prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             """
-            You are an AI that reads documents for you. Please answer based on the document given below. 
+            You are an AI that reads documents for me. Please answer based on the document given below. 
             If the information is not in the document, answer the question with “The required information is not in the document.” Never make up answers. \n\n{context}
             """,
         ),
@@ -110,9 +110,6 @@ if "api_key_bool" not in st.session_state:
 
 
 st.title("DocumentGPT")
-
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
 
 
 def send_message(message, role, save=True):
