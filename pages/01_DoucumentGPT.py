@@ -11,79 +11,11 @@ from langchain.storage import LocalFileStore
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.schema.runnable import RunnablePassthrough, RunnableLambda
 from langchain.memory import ConversationBufferMemory
+from langchain_core.callbacks import BaseCallbackHandler
 
 # 시험 결과 embedding, llm 성능 모두 openai가 더 좋았음
 # 또한 ollama는 openai보다 더 느림
 # ollama는 embedding이 매우 잘못되어 있음... 이유를 모르겠음... (제대로 확인해 볼 문제... 내가 설정하는 과정이 문제일 수 있음)
-
-LLM_model, models = ["openai", "GPT-3.5-turbo"]
-
-file_name = "document.txt"
-
-llm = ChatOpenAI(temperature=0.1)
-
-loader = UnstructuredFileLoader(f"./files/{file_name}")
-cache_dir = LocalFileStore(f"./.cache/embeddings/{LLM_model}/{models}/{file_name}")
-
-splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-    separators=["\n\n", ".", "?", "!"],
-    chunk_size=1000,
-    chunk_overlap=100,
-)
-
-docs = loader.load_and_split(text_splitter=splitter)
-embeddings = OpenAIEmbeddings()
-
-cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
-
-vectorstore = FAISS.from_documents(docs, cached_embeddings)
-
-retriever = vectorstore.as_retriever()
-
-memory = ConversationBufferMemory(
-    llm=llm,
-    return_messages=True,
-    memory_key="history",
-)
-
-
-def load_memory(_):
-    return memory.load_memory_variables({})["history"]
-
-
-prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """
-            You are an AI that reads documents for me. Please answer based on the document given below. 
-            If the information is not in the document, answer the question with “The required information is not in the document.” Never make up answers. \n\n{context}
-            """,
-        ),
-        MessagesPlaceholder(variable_name="history"),
-        ("human", "{question}"),
-    ]
-)
-
-chain = (
-    {
-        "context": retriever,
-        "question": RunnablePassthrough(),
-        "history": RunnableLambda(load_memory),
-    }
-    | prompt
-    | llm
-)
-
-
-def invoke_chain(question):
-    result = chain.invoke(question).content
-    memory.save_context(
-        {"input": question},
-        {"output": result},
-    )
-    print(result)
-
 
 st.set_page_config(
     page_title="DocumentGPT",
@@ -102,12 +34,109 @@ if "api_key_bool" not in st.session_state:
 
 st.title("DocumentGPT")
 
+st.markdown(
+    """
+Welcome!
+            
+Use this chatbot to ask questions to an AI about your files!
+
+Upload your files on the sidebar.
+"""
+)
+
+
+class ChatCallbackHandler(BaseCallbackHandler):
+    message = ""
+
+    def on_llm_start(self, *args, **kwargs):
+        self.message_box = st.empty()
+
+    def on_llm_end(self, *args, **kwargs):
+        save_message(self.message, "ai")
+
+    def on_llm_new_token(self, token, *args, **kwargs):
+        self.message += token
+        self.message_box.markdown(self.message)
+
+
+llm = ChatOpenAI(
+    temperature=0.1,
+    streaming=True,
+    callbacks={
+        ChatCallbackHandler(),
+    },
+    api_key=st.session_state["api_key"],
+)
+
+
+@st.cache_data(show_spinner="Embedding file...")
+def embed_file(file):
+    file_content = file.read()
+    file_path = f"./.cache/files/{file.name}"
+    with open(file_path, "wb") as f:
+        f.write(file_content)
+    cache_dir = LocalFileStore(f"./.cache/embeddings/open_ai/{file.name}")
+    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
+        separators=["\n\n", ".", "?", "!"],
+        chunk_size=1000,
+        chunk_overlap=100,
+    )
+    loader = UnstructuredFileLoader(file_path)
+    docs = loader.load_and_split(text_splitter=splitter)
+    embeddings = OpenAIEmbeddings()
+    cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
+    vectorstore = FAISS.from_documents(docs, cached_embeddings)
+    retriever = vectorstore.as_retriever()
+    return retriever
+
+
+def save_message(message, role):
+    st.session_state["messages"].append({"message": message, "role": role})
+
 
 def send_message(message, role, save=True):
     with st.chat_message(role):
-        st.write(message)
+        st.markdown(message)
     if save:
-        st.session_state["messages"].append({"message": message, "role": role})
+        save_message(message, role)
+
+
+def paint_history():
+    for message in st.session_state["messages"]:
+        send_message(
+            message["message"],
+            message["role"],
+            save=False,
+        )
+
+
+def format_docs(docs):
+    return "\n\n".join(document.page_content for document in docs)
+
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+            You are an AI that reads documents for me. Please answer based on the document given below. 
+            If the information is not in the document, answer the question with “The required information is not in the document.” Never make up answers. 
+            
+            Context : {context}
+            """,
+        ),
+        ("human", "{question}"),
+    ]
+)
+
+
+def invoke_chain(question):
+    result = chain.invoke(question).content
+    memory.save_context(
+        {"input": question},
+        {"output": result},
+    )
+    print(result)
 
 
 for message in st.session_state["messages"]:
@@ -164,3 +193,25 @@ with st.sidebar:
     st.write(
         "https://github.com/lips85/normard-langchain/blob/main/pages/01_DoucumentGPT.py"
     )
+
+if st.session_state["api_key_bool"]:
+    if file:
+        retriever = embed_file(file)
+        send_message("I'm ready! Ask away!", "ai", save=False)
+        paint_history()
+        message = st.chat_input("Ask anything about your file...")
+        if message:
+            send_message(message, "human")
+            chain = (
+                {
+                    "context": retriever | RunnableLambda(format_docs),
+                    "question": RunnablePassthrough(),
+                }
+                | prompt
+                | llm
+            )
+            with st.chat_message("ai"):
+                chain.invoke(message)
+
+    else:
+        st.session_state["messages"] = []
