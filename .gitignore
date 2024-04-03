@@ -4,6 +4,7 @@
 README.md
 .cache/
 files/
+.streamlit/
 
 
 # Byte-compiled / optimized / DLL files
