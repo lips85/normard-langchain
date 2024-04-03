@@ -1,12 +1,10 @@
 import time
 import streamlit as st
 
-from langchain.chat_models.ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from langchain.document_loaders.unstructured import UnstructuredFileLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
-from langchain.embeddings.ollama import OllamaEmbeddings
 from langchain.embeddings.cache import CacheBackedEmbeddings
 from langchain.vectorstores.faiss import FAISS
 from langchain.storage import LocalFileStore
@@ -19,15 +17,10 @@ from langchain.memory import ConversationBufferMemory
 # ollama는 embedding이 매우 잘못되어 있음... 이유를 모르겠음... (제대로 확인해 볼 문제... 내가 설정하는 과정이 문제일 수 있음)
 
 LLM_model, models = ["openai", "GPT-3.5-turbo"]
-# LLM_model, models = ["ollama", "openhermes:latest"]
 
 file_name = "document.txt"
 
-llm = (
-    ChatOllama(temperature=0.1, model=models)
-    if LLM_model == "ollama"
-    else ChatOpenAI(temperature=0.1)
-)
+llm = ChatOpenAI(temperature=0.1)
 
 loader = UnstructuredFileLoader(f"./files/{file_name}")
 cache_dir = LocalFileStore(f"./.cache/embeddings/{LLM_model}/{models}/{file_name}")
@@ -39,9 +32,7 @@ splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
 )
 
 docs = loader.load_and_split(text_splitter=splitter)
-embeddings = (
-    OllamaEmbeddings(model=models) if LLM_model == "ollama" else OpenAIEmbeddings()
-)
+embeddings = OpenAIEmbeddings()
 
 cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
 
