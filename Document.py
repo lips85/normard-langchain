@@ -144,7 +144,11 @@ with st.sidebar:
         if api_key == "":
             st.warning("OPENAI_API_KEY를 넣어주세요.")
 
-    openai_model = st.selectbox("OpneAI Model을 골라주세요.", openai_models)
+    openai_model = st.selectbox(
+        "OpneAI Model을 골라주세요.",
+        openai_models,
+        placeholder="Choose an option",
+    )
 
     if re.match(Model_pattern, openai_model):
         save_openai_model(openai_model)
