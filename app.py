@@ -1,4 +1,5 @@
 import re
+import os
 import streamlit as st
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -71,6 +72,7 @@ llm = ChatOpenAI(
 
 @st.cache_resource(show_spinner="Embedding file...")
 def embed_file(file):
+    os.makedirs("./.cache/files", exist_ok=True)
     file_content = file.read()
     file_path = f"./.cache/files/{file.name}"
     with open(file_path, "wb") as f:
