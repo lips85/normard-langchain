@@ -12,9 +12,6 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.callbacks import BaseCallbackHandler
 
-# 시험 결과 embedding, llm 성능 모두 openai가 더 좋았음
-# 또한 ollama는 openai보다 더 느림
-# ollama는 embedding이 매우 잘못되어 있음... 이유를 모르겠음... (제대로 확인해 볼 문제... 내가 설정하는 과정이 문제일 수 있음)
 
 st.set_page_config(
     page_title="DocumentGPT",
@@ -30,18 +27,20 @@ if "api_key" not in st.session_state:
 if "api_key_check" not in st.session_state:
     st.session_state["api_key_check"] = False
 
-pattern = r"sk-.*"
+if "openai_model" not in st.session_state:
+    st.session_state["openai_model"] = None
 
+API_KEY_pattern = r"sk-.*"
+
+Model_pattern = r"gpt-*"
+
+openai_models = ["gpt-4-0125-preview", "gpt-3.5-turbo-0125"]
 
 st.title("DocumentGPT")
 
-st.markdown(
+st.header(
     """
-Welcome!
-            
-Use this chatbot to ask questions to an AI about your files!
-
-Upload your files on the sidebar.
+안녕하세요! 이 페이지는 문서를 읽어주는 AI입니다. 문서를 업로드하고 질문을 하면 문서에 대한 답변을 해줍니다.
 """
 )
 
@@ -58,16 +57,6 @@ class ChatCallbackHandler(BaseCallbackHandler):
     def on_llm_new_token(self, token, *args, **kwargs):
         self.message += token
         self.message_box.markdown(self.message)
-
-
-llm = ChatOpenAI(
-    temperature=0.1,
-    streaming=True,
-    callbacks={
-        ChatCallbackHandler(),
-    },
-    openai_api_key=st.session_state["api_key"],
-)
 
 
 @st.cache_resource(show_spinner="Embedding file...")
@@ -123,20 +112,9 @@ def save_api_key(api_key):
     st.session_state["api_key_check"] = True
 
 
-prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """
-            You are an AI that reads documents for me. Please answer based on the document given below. 
-            If the information is not in the document, answer the question with “The required information is not in the document.” Never make up answers. 
-            
-            Context : {context}
-            """,
-        ),
-        ("human", "{question}"),
-    ]
-)
+def save_openai_model(openai_model):
+    st.session_state["openai_model"] = openai_model
+    st.session_state["openai_model_check"] = True
 
 
 with st.sidebar:
@@ -160,13 +138,46 @@ with st.sidebar:
     if button:
         save_api_key(api_key)
         if api_key == "":
-            st.write("OPENAI_API_KEY를 넣어주세요.")
+            st.warning("OPENAI_API_KEY를 넣어주세요.")
+
+    openai_model = st.selectbox("OpneAI Model을 골라주세요.", openai_models)
+
+    if re.match(Model_pattern, openai_model):
+        save_openai_model(openai_model)
+        st.write("모델이 저장되었습니다.")
 
     st.write("Made by harry.")
 
     st.write(
         "https://github.com/lips85/normard-langchain/blob/main/pages/01_DoucumentGPT.py"
     )
+
+llm = ChatOpenAI(
+    temperature=0.1,
+    streaming=True,
+    callbacks={
+        ChatCallbackHandler(),
+    },
+    model=st.session_state["openai_model"],
+    openai_api_key=st.session_state["api_key"],
+)
+
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+            You are an AI that reads documents for me. Please answer based on the document given below. 
+            If the information is not in the document, answer the question with “The required information is not in the document.” Never make up answers.
+            Please answer in the questioner's language 
+            
+            Context : {context}
+            """,
+        ),
+        ("human", "{question}"),
+    ]
+)
+
 
 if (st.session_state["api_key_check"] == True) and (
     st.session_state["api_key"] != None
@@ -177,7 +188,7 @@ if (st.session_state["api_key_check"] == True) and (
         paint_history()
         message = st.chat_input("Ask anything about your file...")
         if message:
-            if re.match(pattern, st.session_state["api_key"]):
+            if re.match(API_KEY_pattern, st.session_state["api_key"]):
                 send_message(message, "human")
                 chain = (
                     {
