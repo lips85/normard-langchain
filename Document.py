@@ -36,7 +36,7 @@ API_KEY_pattern = r"sk-.*"
 
 Model_pattern = r"gpt-*"
 
-openai_models = ["gpt-4-0125-preview", "gpt-3.5-turbo-0125"]
+openai_models = ["선택해주세요", "gpt-4-0125-preview", "gpt-3.5-turbo-0125"]
 
 st.title("DocumentGPT")
 
@@ -146,10 +146,10 @@ with st.sidebar:
 
     openai_model = st.selectbox(
         "OpneAI Model을 골라주세요.",
-        openai_models,
+        options=openai_models,
         placeholder="Choose an option",
     )
-    if openai_model:
+    if openai_model != "선택해주세요":
         if re.match(Model_pattern, openai_model):
             save_openai_model(openai_model)
             st.write("😄모델이 선택되었습니다.😄")
@@ -196,7 +196,9 @@ if (st.session_state["api_key_check"] == True) and (
         paint_history()
         message = st.chat_input("Ask anything about your file...")
         if message:
-            if re.match(API_KEY_pattern, st.session_state["api_key"]):
+            if re.match(API_KEY_pattern, st.session_state["api_key"]) and re.match(
+                Model_pattern, st.session_state["openai_model"]
+            ):
                 send_message(message, "human")
                 chain = (
                     {
@@ -211,10 +213,10 @@ if (st.session_state["api_key_check"] == True) and (
                         chain.invoke(message)
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
-                    st.warning("OPENAI_API_KEY를 다시 넣어주세요.")
+                    st.warning("OPENAI_API_KEY or 모델 선택을 다시 진행해주세요.")
 
             else:
-                message = "OPENAI_API_KEY가 잘못되었습니다. 다시 넣어주세요."
+                message = "OPENAI_API_KEY or 모델 선택이 잘못되었습니다. 사이드바를 다시 확인하세요."
                 send_message(message, "ai")
 
     else:
