@@ -152,7 +152,7 @@ with st.sidebar:
     api_key = st.text_input(
         "API_KEY 입력",
         placeholder="sk-...",
-        disabled=st.session_state["api_key"] is not "",
+        disabled=st.session_state["api_key"] != None,
     ).strip()
 
     if api_key:
