@@ -21,14 +21,18 @@ st.set_page_config(
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
+
 if "api_key" not in st.session_state:
     st.session_state["api_key"] = None
 
+
 if "api_key_check" not in st.session_state:
     st.session_state["api_key_check"] = False
+    st.warning("OPENAI_API_KEY를 넣어주세요.")
 
 if "openai_model" not in st.session_state:
     st.session_state["openai_model"] = None
+    st.warning("OpenAI Model을 골라주세요.")
 
 API_KEY_pattern = r"sk-.*"
 
@@ -38,7 +42,7 @@ openai_models = ["gpt-4-0125-preview", "gpt-3.5-turbo-0125"]
 
 st.title("DocumentGPT")
 
-st.header(
+st.markdown(
     """
 안녕하세요! 이 페이지는 문서를 읽어주는 AI입니다. 문서를 업로드하고 질문을 하면 문서에 대한 답변을 해줍니다.
 """
@@ -201,6 +205,7 @@ if (st.session_state["api_key_check"] == True) and (
                 with st.chat_message("ai"):
                     chain.invoke(message)
             else:
+                st.warning("OPENAI_API_KEY가 잘못되었습니다. 다시 넣어주세요.")
                 message = "OPENAI_API_KEY가 잘못되었습니다. 다시 넣어주세요."
                 send_message(message, "ai")
 
