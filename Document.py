@@ -133,7 +133,7 @@ with st.sidebar:
         disabled=st.session_state["api_key"] != None,
     ).strip()
 
-    if api_key:
+    if api_key != None:
         save_api_key(api_key)
         st.write("😄API_KEY가 저장되었습니다.😄")
 
