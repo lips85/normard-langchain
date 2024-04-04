@@ -12,10 +12,6 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.callbacks import BaseCallbackHandler
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 # 시험 결과 embedding, llm 성능 모두 openai가 더 좋았음
 # 또한 ollama는 openai보다 더 느림
 # ollama는 embedding이 매우 잘못되어 있음... 이유를 모르겠음... (제대로 확인해 볼 문제... 내가 설정하는 과정이 문제일 수 있음)
