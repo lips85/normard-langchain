@@ -1,16 +1,14 @@
 import time
 import streamlit as st
 
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.document_loaders.unstructured import UnstructuredFileLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
 from langchain.embeddings.cache import CacheBackedEmbeddings
 from langchain.vectorstores.faiss import FAISS
 from langchain.storage import LocalFileStore
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain.prompts import ChatPromptTemplate
 from langchain.schema.runnable import RunnablePassthrough, RunnableLambda
-from langchain.memory import ConversationBufferMemory
 from langchain_core.callbacks import BaseCallbackHandler
 
 # 시험 결과 embedding, llm 성능 모두 openai가 더 좋았음
