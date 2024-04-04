@@ -153,11 +153,12 @@ with st.sidebar:
             save_openai_model(openai_model)
             st.write("😄모델이 선택되었습니다.😄")
 
+    st.write("")
+    st.write("")
+    st.write("")
     st.write("Made by harry.")
 
-    st.write(
-        "https://github.com/lips85/normard-langchain/blob/main/pages/01_DoucumentGPT.py"
-    )
+    st.write("https://huchu.link/uxyhwyR")
 
 llm = ChatOpenAI(
     temperature=0.1,
