@@ -157,7 +157,7 @@ with st.sidebar:
         """
              
 
-        Made by harry.
+        Made by hary.
              
         Github
         https://huchu.link/uxyhwyR
