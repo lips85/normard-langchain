@@ -133,7 +133,7 @@ with st.sidebar:
         disabled=st.session_state["api_key"] != None,
     ).strip()
 
-    if api_key != None:
+    if api_key:
         save_api_key(api_key)
         st.write("😄API_KEY가 저장되었습니다.😄")
 
@@ -149,10 +149,10 @@ with st.sidebar:
         openai_models,
         placeholder="Choose an option",
     )
-
-    if re.match(Model_pattern, openai_model):
-        save_openai_model(openai_model)
-        st.write("😄모델이 선택되었습니다.😄")
+    if openai_model:
+        if re.match(Model_pattern, openai_model):
+            save_openai_model(openai_model)
+            st.write("😄모델이 선택되었습니다.😄")
 
     st.write("Made by harry.")
 
