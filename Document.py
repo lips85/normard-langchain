@@ -22,15 +22,15 @@ st.set_page_config(
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
-
 if "api_key" not in st.session_state:
     st.session_state["api_key"] = None
-
 
 if "api_key_check" not in st.session_state:
     st.session_state["api_key_check"] = False
 
-st.session_state["openai_model"] = None
+if "openai_model" not in st.session_state:
+    st.session_state["openai_model"] = "선택해주세요"
+
 
 API_KEY_pattern = r"sk-.*"
 
@@ -147,7 +147,6 @@ with st.sidebar:
     openai_model = st.selectbox(
         "OpneAI Model을 골라주세요.",
         options=openai_models,
-        placeholder="Choose an option",
     )
     if openai_model != "선택해주세요":
         if re.match(Model_pattern, openai_model):
@@ -195,10 +194,13 @@ if (st.session_state["api_key_check"] == True) and (
         send_message("I'm ready! Ask away!", "ai", save=False)
         paint_history()
         message = st.chat_input("Ask anything about your file...")
+
         if message:
+
             if re.match(API_KEY_pattern, st.session_state["api_key"]) and re.match(
                 Model_pattern, st.session_state["openai_model"]
             ):
+
                 send_message(message, "human")
                 chain = (
                     {
@@ -211,6 +213,7 @@ if (st.session_state["api_key_check"] == True) and (
                 try:
                     with st.chat_message("ai"):
                         chain.invoke(message)
+
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
                     st.warning("OPENAI_API_KEY or 모델 선택을 다시 진행해주세요.")
