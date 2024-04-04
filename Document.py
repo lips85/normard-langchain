@@ -202,10 +202,14 @@ if (st.session_state["api_key_check"] == True) and (
                     | prompt
                     | llm
                 )
-                with st.chat_message("ai"):
-                    chain.invoke(message)
+                try:
+                    with st.chat_message("ai"):
+                        chain.invoke(message)
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
+                    st.warning("OPENAI_API_KEY를 다시 넣어주세요.")
+
             else:
-                st.warning("OPENAI_API_KEY가 잘못되었습니다. 다시 넣어주세요.")
                 message = "OPENAI_API_KEY가 잘못되었습니다. 다시 넣어주세요."
                 send_message(message, "ai")
 
