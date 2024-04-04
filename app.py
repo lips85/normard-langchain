@@ -24,7 +24,7 @@ if "messages" not in st.session_state:
     st.session_state["messages"] = []
 
 if "api_key" not in st.session_state:
-    st.session_state["api_key"] = None
+    st.session_state.api_key = ""
 
 if "api_key_bool" not in st.session_state:
     st.session_state["api_key_bool"] = False
@@ -146,7 +146,7 @@ with st.sidebar:
     api_key = st.text_input(
         "API_KEY 입력",
         placeholder="sk-...",
-        disabled=st.session_state["api_key"] is not None,
+        disabled=st.session_state["api_key"] is not "",
     ).strip()
 
     if api_key:
@@ -166,7 +166,7 @@ with st.sidebar:
         "https://github.com/lips85/normard-langchain/blob/main/pages/01_DoucumentGPT.py"
     )
 
-if (st.session_state["api_key_bool"] == True) and (st.session_state["api_key"] != None):
+if (st.session_state["api_key_bool"] == True) and (st.session_state["api_key"] != ""):
     if file:
         retriever = embed_file(file)
         send_message("I'm ready! Ask away!", "ai", save=False)
