@@ -29,11 +29,8 @@ if "api_key" not in st.session_state:
 
 if "api_key_check" not in st.session_state:
     st.session_state["api_key_check"] = False
-    st.warning("OPENAI_API_KEY를 넣어주세요.")
 
-if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = None
-    st.warning("OpenAI Model을 골라주세요.")
+st.session_state["openai_model"] = None
 
 API_KEY_pattern = r"sk-.*"
 
