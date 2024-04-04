@@ -20,15 +20,6 @@ st.set_page_config(
     page_icon="📃",
 )
 
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
-
-if "api_key" not in st.session_state:
-    st.session_state["api_key"] = None
-
-if "api_key_bool" not in st.session_state:
-    st.session_state["api_key_bool"] = False
-
 
 st.title("DocumentGPT")
 
@@ -145,6 +136,15 @@ with st.sidebar:
         placeholder="OPENAI_API_KEY를 입력하세요",
         disabled=st.session_state["api_key"] is not None,
     )
+
+    if "messages" not in st.session_state:
+        st.session_state["messages"] = []
+
+    if "api_key" not in st.session_state:
+        st.session_state["api_key"] = None
+
+    if "api_key_bool" not in st.session_state:
+        st.session_state["api_key_bool"] = False
 
     if api_key:
         save_api_key(api_key)
