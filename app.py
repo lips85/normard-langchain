@@ -65,7 +65,7 @@ llm = ChatOpenAI(
     callbacks={
         ChatCallbackHandler(),
     },
-    api_key=st.session_state["api_key"],
+    openai_api_key=st.session_state["api_key"],
 )
 
 
@@ -167,7 +167,7 @@ with st.sidebar:
         "https://github.com/lips85/normard-langchain/blob/main/pages/01_DoucumentGPT.py"
     )
 
-if st.session_state["api_key_bool"] == True:
+if (st.session_state["api_key_bool"] == True) and (st.session_state["api_key"] != None):
     if file:
         retriever = embed_file(file)
         send_message("I'm ready! Ask away!", "ai", save=False)
