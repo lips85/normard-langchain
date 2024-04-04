@@ -1,4 +1,4 @@
-import time
+import re
 import streamlit as st
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
@@ -8,7 +8,7 @@ from langchain.embeddings.cache import CacheBackedEmbeddings
 from langchain.vectorstores.faiss import FAISS
 from langchain.storage import LocalFileStore
 from langchain.prompts import ChatPromptTemplate
-from langchain.schema.runnable import RunnablePassthrough, RunnableLambda
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.callbacks import BaseCallbackHandler
 
 # 시험 결과 embedding, llm 성능 모두 openai가 더 좋았음
@@ -19,6 +19,17 @@ st.set_page_config(
     page_title="DocumentGPT",
     page_icon="📃",
 )
+
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
+
+if "api_key" not in st.session_state:
+    st.session_state["api_key"] = None
+
+if "api_key_bool" not in st.session_state:
+    st.session_state["api_key_bool"] = False
+
+pattern = r"sk-.*"
 
 
 st.title("DocumentGPT")
@@ -72,7 +83,9 @@ def embed_file(file):
     )
     loader = UnstructuredFileLoader(file_path)
     docs = loader.load_and_split(text_splitter=splitter)
-    embeddings = OpenAIEmbeddings()
+    embeddings = OpenAIEmbeddings(
+        openai_api_key=st.session_state["api_key"],
+    )
     cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
     vectorstore = FAISS.from_documents(docs, cached_embeddings)
     retriever = vectorstore.as_retriever()
@@ -130,21 +143,11 @@ with st.sidebar:
         type=["pdf", "txt", "docx"],
     )
 
-with st.sidebar:
     api_key = st.text_input(
         "API_KEY 입력",
-        placeholder="OPENAI_API_KEY를 입력하세요",
+        placeholder="sk-...",
         disabled=st.session_state["api_key"] is not None,
-    )
-
-    if "messages" not in st.session_state:
-        st.session_state["messages"] = []
-
-    if "api_key" not in st.session_state:
-        st.session_state["api_key"] = None
-
-    if "api_key_bool" not in st.session_state:
-        st.session_state["api_key_bool"] = False
+    ).strip()
 
     if api_key:
         save_api_key(api_key)
@@ -157,8 +160,6 @@ with st.sidebar:
         if api_key == "":
             st.write("OPENAI_API_KEY를 넣어주세요.")
 
-
-with st.sidebar:
     st.write("Made by harry.")
 
     st.write(
@@ -172,17 +173,21 @@ if (st.session_state["api_key_bool"] == True) and (st.session_state["api_key"] !
         paint_history()
         message = st.chat_input("Ask anything about your file...")
         if message:
-            send_message(message, "human")
-            chain = (
-                {
-                    "context": retriever | RunnableLambda(format_docs),
-                    "question": RunnablePassthrough(),
-                }
-                | prompt
-                | llm
-            )
-            with st.chat_message("ai"):
-                chain.invoke(message)
+            if re.match(pattern, st.session_state["api_key"]):
+                send_message(message, "human")
+                chain = (
+                    {
+                        "context": retriever | RunnableLambda(format_docs),
+                        "question": RunnablePassthrough(),
+                    }
+                    | prompt
+                    | llm
+                )
+                with st.chat_message("ai"):
+                    chain.invoke(message)
+            else:
+                message = "OPENAI_API_KEY가 잘못되었습니다. 다시 넣어주세요."
+                send_message(message, "ai")
 
     else:
         st.session_state["messages"] = []
