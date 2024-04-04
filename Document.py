@@ -27,8 +27,8 @@ if "messages" not in st.session_state:
 if "api_key" not in st.session_state:
     st.session_state["api_key"] = None
 
-if "api_key_bool" not in st.session_state:
-    st.session_state["api_key_bool"] = False
+if "api_key_check" not in st.session_state:
+    st.session_state["api_key_check"] = False
 
 pattern = r"sk-.*"
 
@@ -120,7 +120,7 @@ def format_docs(docs):
 
 def save_api_key(api_key):
     st.session_state["api_key"] = api_key
-    st.session_state["api_key_bool"] = True
+    st.session_state["api_key_check"] = True
 
 
 prompt = ChatPromptTemplate.from_messages(
@@ -168,7 +168,9 @@ with st.sidebar:
         "https://github.com/lips85/normard-langchain/blob/main/pages/01_DoucumentGPT.py"
     )
 
-if (st.session_state["api_key_bool"] == True) and (st.session_state["api_key"] != None):
+if (st.session_state["api_key_check"] == True) and (
+    st.session_state["api_key"] != None
+):
     if file:
         retriever = embed_file(file)
         send_message("I'm ready! Ask away!", "ai", save=False)
