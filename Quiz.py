@@ -11,6 +11,7 @@ from langchain.storage import LocalFileStore
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from langchain_core.callbacks import BaseCallbackHandler
+from langchain.retrievers.wikipedia import WikipediaRetriever
 
 
 st.set_page_config(
@@ -122,10 +123,25 @@ def save_openai_model(openai_model):
 
 
 with st.sidebar:
-    file = st.file_uploader(
-        "Upload a .txt .pdf or .docx file",
-        type=["pdf", "txt", "docx"],
+    choice = st.selectbox(
+        "Choose what you want to use.",
+        (
+            "File",
+            "Wikipedia Article",
+        ),
     )
+    if choice == "Internet Article":
+        topic = st.text_input("Search Wikipedia...")
+        if topic:
+            retriever = WikipediaRetriever(top_k_results=5)
+            with st.status("Searching Wikipedia..."):
+                docs = retriever.get_relevant_documents(topic)
+
+    elif choice == "File":
+        file = st.file_uploader(
+            "Upload a .txt .pdf or .docx file",
+            type=["pdf", "txt", "docx"],
+        )
 
     api_key = st.text_input(
         "API_KEY 입력",
@@ -160,10 +176,10 @@ with st.sidebar:
         Made by hary.
              
         Github
-        https://huchu.link/uxyhwyR
+        https://github.com/lips85/normard-langchain/blob/main/Quiz.py
 
         streamlit
-        https://nomad-langchain-hary.streamlit.app/
+        https://nomad-langchain-quiz-hary.streamlit.app/
 
         """
     )
