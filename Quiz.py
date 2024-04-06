@@ -38,13 +38,13 @@ Model_pattern = r"gpt-*"
 
 openai_models = ["선택해주세요", "gpt-4-0125-preview", "gpt-3.5-turbo-0125"]
 
-st.title("DocumentGPT")
+st.title("QuizGPT❗❓")
 
 st.markdown(
     """
-    안녕하세요! 이 페이지는 문서를 읽어주는 AI입니다.😄 
+    안녕하세요! 이 페이지는 문서를 읽고 퀴즈를 만들어주는 GPT입니다.😄 
     
-    문서를 업로드하고 질문을 하면 문서에 대한 답변을 해줍니다.
+    문서를 업로드하면 문제를 만들어 드립니다!
     """
 )
 
