@@ -19,6 +19,13 @@ if "api_key_check" not in st.session_state:
 if "openai_model" not in st.session_state:
     st.session_state["openai_model"] = "선택해주세요"
 
+if "quiz_subject" not in st.session_state:
+    st.session_state["quiz_subject"] = ""
+
+if "quiz_submitted" not in st.session_state:
+    st.session_state["quiz_submitted"] = False
+
+
 API_KEY_pattern = r"sk-.*"
 
 Model_pattern = r"gpt-*"
@@ -44,6 +51,10 @@ def save_api_key(api_key):
 def save_openai_model(openai_model):
     st.session_state["openai_model"] = openai_model
     st.session_state["openai_model_check"] = True
+
+
+def set_quiz_submitted(value: bool):
+    st.session_state.update({"quiz_submitted": value})
 
 
 with st.sidebar:
@@ -158,19 +169,11 @@ prompt = PromptTemplate.from_template(
 )
 
 
-if not api_key:
-    st.warning("Please provide an :blue[OpenAI API Key] on the sidebar.")
+if re.match(API_KEY_pattern, st.session_state["api_key"]) and re.match(
+    Model_pattern, st.session_state["openai_model"]
+):
 
-else:
     try:
-        if "quiz_subject" not in st.session_state:
-            st.session_state["quiz_subject"] = ""
-
-        if "quiz_submitted" not in st.session_state:
-            st.session_state["quiz_submitted"] = False
-
-        def set_quiz_submitted(value: bool):
-            st.session_state.update({"quiz_submitted": value})
 
         @st.cache_data(show_spinner="퀴즈를 맛있게 굽고 있어요...")
         def run_quiz_chain(*, subject, count, difficulty):
@@ -353,3 +356,9 @@ else:
 
         if "response" in locals():
             response_box.json(response)
+
+
+else:
+    st.error(
+        "OPENAI_API_KEY or 모델 선택이 잘못되었습니다. 사이드바를 다시 확인하세요."
+    )
