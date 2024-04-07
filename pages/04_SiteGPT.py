@@ -1,9 +1,8 @@
-from langchain.document_loaders import SitemapLoader
-from langchain.schema.runnable import RunnableLambda, RunnablePassthrough
+from langchain.document_loaders.sitemap import SitemapLoader
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores.faiss import FAISS
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 import streamlit as st
 
