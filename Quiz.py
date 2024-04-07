@@ -91,6 +91,73 @@ with st.sidebar:
         """
     )
 
+function = {
+    "name": "create_quiz",
+    "description": "function that takes a list of questions and answers and returns a quiz",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "questions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "question": {
+                            "type": "string",
+                        },
+                        "answers": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "answer": {
+                                        "type": "string",
+                                    },
+                                    "correct": {
+                                        "type": "boolean",
+                                    },
+                                },
+                                "required": ["answer", "correct"],
+                            },
+                        },
+                    },
+                    "required": ["question", "answers"],
+                },
+            }
+        },
+        "required": ["questions"],
+    },
+}
+# ChatOpenAI model 정보
+# - https://platform.openai.com/docs/models/gpt-3-5-turbo
+llm = ChatOpenAI(
+    openai_api_key=api_key,
+    model="gpt-3.5-turbo-0125",
+    temperature=0.1,
+).bind(
+    function_call="auto",
+    functions=[
+        function,
+    ],
+)
+
+prompt = PromptTemplate.from_template(
+    """            
+    Please create a quiz based on the following criteria:
+
+    Topic: {subject}
+    Number of Questions: {count}
+    Difficulty Level: Level-{difficulty}/5
+    Language: Korean
+
+    The quiz should be well-structured with clear questions and correct answers.
+    Ensure that the questions are relevant to the specified topic and adhere to the selected difficulty level.
+    The quiz format should be multiple-choice,
+    and each question should be accompanied by four possible answers, with only one correct option.
+    """,
+)
+
+
 if not api_key:
     st.warning("Please provide an :blue[OpenAI API Key] on the sidebar.")
 
@@ -169,72 +236,6 @@ else:
                 on_click=set_quiz_submitted,
                 args=(False,),
             )
-
-        function = {
-            "name": "create_quiz",
-            "description": "function that takes a list of questions and answers and returns a quiz",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "questions": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "question": {
-                                    "type": "string",
-                                },
-                                "answers": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "answer": {
-                                                "type": "string",
-                                            },
-                                            "correct": {
-                                                "type": "boolean",
-                                            },
-                                        },
-                                        "required": ["answer", "correct"],
-                                    },
-                                },
-                            },
-                            "required": ["question", "answers"],
-                        },
-                    }
-                },
-                "required": ["questions"],
-            },
-        }
-        # ChatOpenAI model 정보
-        # - https://platform.openai.com/docs/models/gpt-3-5-turbo
-        llm = ChatOpenAI(
-            openai_api_key=api_key,
-            model="gpt-3.5-turbo-0125",
-            temperature=0.1,
-        ).bind(
-            function_call="auto",
-            functions=[
-                function,
-            ],
-        )
-
-        prompt = PromptTemplate.from_template(
-            """            
-            Please create a quiz based on the following criteria:
-
-            Topic: {subject}
-            Number of Questions: {count}
-            Difficulty Level: Level-{difficulty}/5
-            Language: Korean
-
-            The quiz should be well-structured with clear questions and correct answers.
-            Ensure that the questions are relevant to the specified topic and adhere to the selected difficulty level.
-            The quiz format should be multiple-choice,
-            and each question should be accompanied by four possible answers, with only one correct option.
-            """,
-        )
 
         if quiz_subject:
             response_box = st.empty()
