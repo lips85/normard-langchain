@@ -169,10 +169,10 @@ prompt = PromptTemplate.from_template(
 )
 
 
-if re.match(API_KEY_pattern, st.session_state["api_key"]) and re.match(
-    Model_pattern, st.session_state["openai_model"]
-):
+if not api_key:
+    st.warning("Please provide an :blue[OpenAI API Key] on the sidebar.")
 
+else:
     try:
 
         @st.cache_data(show_spinner="퀴즈를 맛있게 굽고 있어요...")
@@ -356,9 +356,3 @@ if re.match(API_KEY_pattern, st.session_state["api_key"]) and re.match(
 
         if "response" in locals():
             response_box.json(response)
-
-
-else:
-    st.error(
-        "OPENAI_API_KEY or 모델 선택이 잘못되었습니다. 사이드바를 다시 확인하세요."
-    )
