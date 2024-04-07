@@ -1,3 +1,5 @@
+import re
+import os
 import json
 import streamlit as st
 from langchain_openai import ChatOpenAI
@@ -8,51 +10,84 @@ st.set_page_config(
     page_icon="❓",
 )
 
+if "api_key" not in st.session_state:
+    st.session_state["api_key"] = None
+
+if "api_key_check" not in st.session_state:
+    st.session_state["api_key_check"] = False
+
+if "openai_model" not in st.session_state:
+    st.session_state["openai_model"] = "선택해주세요"
+
+API_KEY_pattern = r"sk-.*"
+
+Model_pattern = r"gpt-*"
+
+openai_models = ["선택해주세요", "gpt-4-0125-preview", "gpt-3.5-turbo-0125"]
+
 st.title("QuizGPT❓❗️")
-# with st.expander("과제 내용 보기", expanded=False):
-#     # st.snow()
-#     st.markdown(
-#         """
-#     ### D63 (2024-04-05) 과제
-#     QuizGPT를 구현하되 다음 기능을 추가합니다:
-#     - 함수 호출을 사용합니다.
-#     - 유저가 시험의 난이도를 커스터마이징 할 수 있도록 하고 LLM이 어려운 문제 또는 쉬운 문제를 생성하도록 합니다.
-#     - 만점이 아닌 경우 유저가 시험을 다시 치를 수 있도록 허용합니다.
-#     - 만점이면 `st.ballons`를 사용합니다.
-#     - 유저가 자체 OpenAI API 키를 사용하도록 허용하고, `st.sidebar` 내부의 `st.input`에서 로드합니다.
-#     - `st.sidebar`를 사용하여 Streamlit app의 코드와 함께 Github 리포지토리에 링크를 넣습니다.
-#     """
-#     )
+
+st.markdown(
+    """
+    안녕하세요! 이 페이지는 문서를 읽어주는 AI입니다.😄 
+    
+    문서를 업로드하고 질문을 하면 문서에 대한 답변을 해줍니다.
+    """
+)
+
+
+def save_api_key(api_key):
+    st.session_state["api_key"] = api_key
+    st.session_state["api_key_check"] = True
+
+
+def save_openai_model(openai_model):
+    st.session_state["openai_model"] = openai_model
+    st.session_state["openai_model_check"] = True
+
 
 with st.sidebar:
-    if "api_key" not in st.session_state:
-        st.session_state["api_key"] = ""
+    api_key = st.text_input(
+        "API_KEY 입력",
+        placeholder="sk-...",
+        disabled=st.session_state["api_key"] != None,
+    ).strip()
 
-    api_key_input = st.empty()
+    if api_key:
+        save_api_key(api_key)
+        st.write("😄API_KEY가 저장되었습니다.😄")
 
-    def reset_api_key():
-        st.session_state["api_key"] = ""
-        print(st.session_state["api_key"])
+    button = st.button("저장")
 
-    if st.button(":red[Reset API_KEY]"):
-        reset_api_key()
+    if button:
+        save_api_key(api_key)
+        if api_key == "":
+            st.warning("OPENAI_API_KEY를 넣어주세요.")
 
-    api_key = api_key_input.text_input(
-        ":blue[OpenAI API_KEY]",
-        value=st.session_state["api_key"],
-        key="api_key_input",
+    openai_model = st.selectbox(
+        "OpneAI Model을 골라주세요.",
+        options=openai_models,
     )
-
-    if api_key != st.session_state["api_key"]:
-        st.session_state["api_key"] = api_key
-        st.rerun()
+    if openai_model != "선택해주세요":
+        if re.match(Model_pattern, openai_model):
+            save_openai_model(openai_model)
+            st.write("😄모델이 선택되었습니다.😄")
 
     # print(api_key)
 
     st.divider()
     st.markdown(
         """
-        GitHub 링크: https://github.com/LifeFi/py_w08_fullstack_gpt_d15/blob/d26_quizgpt/pages/D26_QuizGPT.py
+                     
+
+        Made by hary.
+             
+        Github
+        https://github.com/lips85/normard-langchain/blob/main/Quiz.py
+
+        streamlit
+        https://nomad-langchain-quiz-hary.streamlit.app/
+
         """
     )
 
