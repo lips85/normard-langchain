@@ -4,11 +4,11 @@ from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 
 st.set_page_config(
-    page_title="QuizGPT | D26 과제",
-    page_icon="☘️",
+    page_title="QuizGPT❓❗️",
+    page_icon="❓",
 )
 
-st.title("QuizGPT⁉️")
+st.title("QuizGPT❓❗️")
 # with st.expander("과제 내용 보기", expanded=False):
 #     # st.snow()
 #     st.markdown(
