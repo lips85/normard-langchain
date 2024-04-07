@@ -169,7 +169,7 @@ prompt = PromptTemplate.from_template(
 )
 
 
-if not api_key:
+if st.session_state["api_key_check"]:
     st.warning("Please provide an :blue[OpenAI API Key] on the sidebar.")
 
 else:
