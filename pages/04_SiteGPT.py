@@ -10,6 +10,8 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.callbacks import BaseCallbackHandler
 
 
+# 클라우드페어 공식문서 사이트맵?
+# https://developers.cloudflare.com/sitemap.xml
 class ChatCallbackHandler(BaseCallbackHandler):
     message = ""
 
@@ -251,10 +253,10 @@ with st.sidebar:
         Made by hary.
              
         Github
-        https://huchu.link/uxyhwyR
+        https://github.com/lips85/normard-langchain/blob/main/pages/04_SiteGPT.py
 
         streamlit
-        https://nomad-langchain-hary.streamlit.app/
+        https://nomad-fullstack-langchain-hary.streamlit.app/
 
         """
     )
