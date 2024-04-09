@@ -204,7 +204,7 @@ def load_website(url):
         url,
         parsing_function=parse_page,
     )
-    loader.requests_per_second = 2
+    loader.requests_per_second = 500
     docs = loader.load_and_split(text_splitter=splitter)
     vector_store = FAISS.from_documents(docs, OpenAIEmbeddings())
     return vector_store.as_retriever()
