@@ -206,7 +206,12 @@ def load_website(url):
     )
     loader.requests_per_second = 50
     docs = loader.load_and_split(text_splitter=splitter)
-    vector_store = FAISS.from_documents(docs, OpenAIEmbeddings())
+    vector_store = FAISS.from_documents(
+        docs,
+        OpenAIEmbeddings(
+            openai_api_key=st.session_state["api_key"],
+        ),
+    )
     return vector_store.as_retriever()
 
 
