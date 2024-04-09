@@ -1,33 +1,24 @@
-import re
+import re, os
 import streamlit as st
 from langchain.document_loaders.sitemap import SitemapLoader
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores.faiss import FAISS
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
+from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.callbacks import BaseCallbackHandler
-
+from langchain.embeddings.cache import CacheBackedEmbeddings
+from langchain.storage import LocalFileStore
+from langchain.memory.buffer import ConversationBufferMemory
 
 # 클라우드페어 공식문서 사이트맵?
 # https://developers.cloudflare.com/sitemap.xml
-class ChatCallbackHandler(BaseCallbackHandler):
-    message = ""
-
-    def on_llm_start(self, *args, **kwargs):
-        self.message_box = st.empty()
-
-    def on_llm_end(self, *args, **kwargs):
-        save_message(self.message, "ai")
-
-    def on_llm_new_token(self, token, *args, **kwargs):
-        self.message += token
-        self.message_box.markdown(self.message)
 
 
 st.set_page_config(
     page_title="SiteGPT",
     page_icon="🖥️",
+    layout="wide",
 )
 
 st.markdown(
@@ -39,6 +30,8 @@ st.markdown(
     Start by writing the URL of the website on the sidebar.
 """
 )
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
 
 if "api_key" not in st.session_state:
     st.session_state["api_key"] = None
@@ -53,7 +46,21 @@ API_KEY_pattern = r"sk-.*"
 
 Model_pattern = r"gpt-*"
 
-openai_models = ["선택해주세요", "gpt-4-0125-preview", "gpt-3.5-turbo-0125"]
+openai_models = ["선택해주세요", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]
+
+
+class ChatCallbackHandler(BaseCallbackHandler):
+    message = ""
+
+    def on_llm_start(self, *args, **kwargs):
+        self.message_box = st.empty()
+
+    def on_llm_end(self, *args, **kwargs):
+        save_message(self.message, "ai")
+
+    def on_llm_new_token(self, token, *args, **kwargs):
+        self.message += token
+        self.message_box.markdown(self.message)
 
 
 def save_api_key(api_key):
@@ -86,10 +93,6 @@ def paint_history():
         )
 
 
-llm = ChatOpenAI(
-    temperature=0.1,
-)
-
 answers_prompt = ChatPromptTemplate.from_template(
     """
     Using ONLY the following context answer the user's question. If you can't just say you don't know, don't make anything up.
@@ -115,6 +118,7 @@ answers_prompt = ChatPromptTemplate.from_template(
     Your turn!
 
     Question: {question}
+    
 """
 )
 
@@ -122,6 +126,7 @@ answers_prompt = ChatPromptTemplate.from_template(
 def get_answers(inputs):
     docs = inputs["docs"]
     question = inputs["question"]
+    history = inputs["history"]
     answers_chain = answers_prompt | llm
     # answers = []
     # for doc in docs:
@@ -141,6 +146,7 @@ def get_answers(inputs):
             }
             for doc in docs
         ],
+        "history": history,
     }
 
 
@@ -158,6 +164,7 @@ choose_prompt = ChatPromptTemplate.from_messages(
             Answers: {answers}
             """,
         ),
+        MessagesPlaceholder(variable_name="history"),
         ("human", "{question}"),
     ]
 )
@@ -166,7 +173,8 @@ choose_prompt = ChatPromptTemplate.from_messages(
 def choose_answer(inputs):
     answers = inputs["answers"]
     question = inputs["question"]
-    choose_chain = choose_prompt | llm
+    history = inputs["history"]
+    choose_chain = choose_prompt | llm_for_last
     condensed = "\n\n".join(
         f"{answer['answer']}\nSource:{answer['source']}\nDate:{answer['date']}\n"
         for answer in answers
@@ -175,6 +183,7 @@ def choose_answer(inputs):
         {
             "question": question,
             "answers": condensed,
+            "history": history,
         }
     )
 
@@ -194,8 +203,37 @@ def parse_page(soup):
     )
 
 
-@st.cache_data(show_spinner="Loading website...")
+def load_memory(_):
+    return memory.load_memory_variables({})["history"]
+
+
+llm_for_last = ChatOpenAI(
+    temperature=0.1,
+    streaming=True,
+    callbacks={
+        ChatCallbackHandler(),
+    },
+    model=st.session_state["openai_model"],
+    openai_api_key=st.session_state["api_key"],
+)
+llm = ChatOpenAI(
+    temperature=0.1,
+    model=st.session_state["openai_model"],
+    openai_api_key=st.session_state["api_key"],
+)
+
+memory = ConversationBufferMemory(
+    llm=llm,
+    max_token_limit=1000,
+    return_messages=True,
+    memory_key="history",
+)
+
+
+@st.cache_resource(show_spinner="Loading website...")
 def load_website(url):
+    os.makedirs("./.cache/sitemap", exist_ok=True)
+    cache_dir = LocalFileStore(f"./.cache/sitemap/embeddings/{url_name}")
     splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
         chunk_size=1000,
         chunk_overlap=200,
@@ -211,13 +249,13 @@ def load_website(url):
     )
     loader.requests_per_second = 50
     docs = loader.load_and_split(text_splitter=splitter)
-    vector_store = FAISS.from_documents(
-        docs,
-        OpenAIEmbeddings(
-            openai_api_key=st.session_state["api_key"],
-        ),
+    embeddings = OpenAIEmbeddings(
+        openai_api_key=st.session_state["api_key"],
     )
-    return vector_store.as_retriever()
+    cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
+    vectorstore = FAISS.from_documents(docs, cached_embeddings)
+    retriever = vectorstore.as_retriever()
+    return retriever
 
 
 with st.sidebar:
@@ -273,32 +311,59 @@ with st.sidebar:
         """
     )
 
-llm = ChatOpenAI(
-    temperature=0.1,
-    streaming=True,
-    callbacks={
-        ChatCallbackHandler(),
-    },
-    model=st.session_state["openai_model"],
-    openai_api_key=st.session_state["api_key"],
-)
+
+if not api_key:
+    st.warning("Please provide an **:blue[OpenAI API Key]** on the sidebar.")
+
+if not url:
+    st.warning("Please write down a **:blue[Sitemap URL]** on the sidebar.")
 
 
-if url:
-    if ".xml" not in url:
-        with st.sidebar:
-            st.error("Please write down a Sitemap URL.")
+if (st.session_state["api_key_check"] == True) and (
+    st.session_state["api_key"] != None
+):
+    if url:
+        if ".xml" not in url:
+            with st.sidebar:
+                st.error("Please write down a Sitemap URL.")
+        else:
+            retriever = load_website(url)
+            send_message("I'm ready! Ask away!", "ai", save=False)
+            paint_history()
+            message = st.chat_input("Ask a question to the website.")
+            if message:
+                if re.match(API_KEY_pattern, st.session_state["api_key"]) and re.match(
+                    Model_pattern, st.session_state["openai_model"]
+                ):
+                    send_message(message, "human")
+                    try:
+                        chain = (
+                            {
+                                "docs": retriever,
+                                "question": RunnablePassthrough(),
+                                "history": RunnableLambda(load_memory),
+                            }
+                            | RunnableLambda(get_answers)
+                            | RunnableLambda(choose_answer)
+                        )
+
+                        def invoke_chain(question):
+                            result = chain.invoke(question).content
+                            memory.save_context(
+                                {"input": question},
+                                {"output": result},
+                            )
+                            return result
+
+                        with st.chat_message("ai"):
+                            invoke_chain(message)
+
+                    except Exception as e:
+                        st.error(f"An error occurred: {e}")
+                        st.warning("OPENAI_API_KEY or 모델 선택을 다시 진행해주세요.")
+
+                else:
+                    message = "OPENAI_API_KEY or 모델 선택이 잘못되었습니다. 사이드바를 다시 확인하세요."
+                    send_message(message, "ai")
     else:
-        retriever = load_website(url)
-        query = st.text_input("Ask a question to the website.")
-        if query:
-            chain = (
-                {
-                    "docs": retriever,
-                    "question": RunnablePassthrough(),
-                }
-                | RunnableLambda(get_answers)
-                | RunnableLambda(choose_answer)
-            )
-            result = chain.invoke(query)
-            st.markdown(result.content.replace("$", "\$"))
+        st.session_state["messages"] = []
