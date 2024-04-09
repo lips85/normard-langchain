@@ -314,7 +314,7 @@ with st.sidebar:
 if not api_key:
     st.warning("Please provide an **:blue[OpenAI API Key]** on the sidebar.")
 
-if not openai_model == "선택해주세요":
+if openai_model == "선택해주세요":
     st.warning("Please write down a **:blue[Sitemap URL]** on the sidebar.")
 
 if not url:
