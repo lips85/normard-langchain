@@ -203,6 +203,11 @@ def load_website(url):
     loader = SitemapLoader(
         url,
         parsing_function=parse_page,
+        filter_urls=[
+            r"https:\/\/developers.cloudflare.com/ai-gateway.*",
+            r"https:\/\/developers.cloudflare.com/vectorize.*",
+            r"https:\/\/developers.cloudflare.com/workers-ai.*",
+        ],
     )
     loader.requests_per_second = 50
     docs = loader.load_and_split(text_splitter=splitter)
@@ -247,8 +252,11 @@ with st.sidebar:
     st.divider()
     url = st.text_input(
         "Write down a URL",
-        placeholder="https://example.com",
+        placeholder="https://example.com/sitemap.xml",
+        value="https://developers.cloudflare.com/sitemap.xml",
     )
+
+    url_name = url.split("://")[1].replace("/", "_") if url else None
 
     st.write(
         """
