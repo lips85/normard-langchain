@@ -291,7 +291,6 @@ with st.sidebar:
     url = st.text_input(
         "Write down a URL",
         placeholder="https://example.com/sitemap.xml",
-        value="https://developers.cloudflare.com/sitemap.xml",
     )
 
     url_name = url.split("://")[1].replace("/", "_") if url else None
