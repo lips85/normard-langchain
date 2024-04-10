@@ -1,4 +1,5 @@
-import re, os
+import re
+import os
 import streamlit as st
 from langchain.document_loaders.sitemap import SitemapLoader
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
@@ -24,11 +25,11 @@ st.set_page_config(
 st.markdown(
     """
     # SiteGPT
-            
+
     Ask questions about the content of a website.
-            
+
     Start by writing the URL of the website on the sidebar.
-"""
+ """
 )
 if "messages" not in st.session_state:
     st.session_state["messages"] = []
@@ -96,7 +97,7 @@ def paint_history():
 answers_prompt = ChatPromptTemplate.from_template(
     """
     Using ONLY the following context answer the user's question. If you can't just say you don't know, don't make anything up.
-                                                  
+
     Then, give a score to the answer between 0 and 5.
 
     If the answer answers the user question the score should be high, else it should be low.
@@ -104,21 +105,21 @@ answers_prompt = ChatPromptTemplate.from_template(
     Make sure to always include the answer's score even if it's 0.
 
     Context: {context}
-                                                  
+
     Examples:
-                                                  
+
     Question: How far away is the moon?
     Answer: The moon is 384,400 km away.
     Score: 5
-                                                  
+
     Question: How far away is the sun?
     Answer: I don't know
     Score: 0
-                                                  
+
     Your turn!
 
     Question: {question}
-    
+
 """
 )
 
@@ -262,7 +263,7 @@ with st.sidebar:
     api_key = st.text_input(
         "API_KEY 입력",
         placeholder="sk-...",
-        disabled=st.session_state["api_key"] != None,
+        disabled=st.session_state["api_key"] is not None,
     ).strip()
 
     if api_key:
@@ -297,10 +298,10 @@ with st.sidebar:
 
     st.write(
         """
-             
+
 
         Made by hary.
-             
+
         Github
         https://github.com/lips85/normard-langchain/blob/main/pages/04_SiteGPT.py
 
