@@ -1,5 +1,4 @@
 import re
-import os
 import json
 import streamlit as st
 from langchain_openai import ChatOpenAI
@@ -61,7 +60,7 @@ with st.sidebar:
     api_key = st.text_input(
         "API_KEY 입력",
         placeholder="sk-...",
-        disabled=st.session_state["api_key"] != None,
+        disabled=st.session_state["api_key"] is not None,
     ).strip()
 
     if api_key:
@@ -169,7 +168,7 @@ prompt = PromptTemplate.from_template(
 )
 
 
-if st.session_state["api_key_check"] == False:
+if st.session_state["api_key_check"] is False:
     st.warning("Please provide an :blue[OpenAI API Key] on the sidebar.")
 
 else:

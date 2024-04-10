@@ -322,8 +322,8 @@ if not url:
     st.warning("Please write down a **:blue[Sitemap URL]** on the sidebar.")
 
 
-if (st.session_state["api_key_check"] == True) and (
-    st.session_state["api_key"] != None
+if (st.session_state["api_key_check"] is True) and (
+    st.session_state["api_key"] is not None
 ):
     if url:
         if ".xml" not in url:

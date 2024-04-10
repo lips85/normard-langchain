@@ -130,7 +130,7 @@ with st.sidebar:
     api_key = st.text_input(
         "API_KEY 입력",
         placeholder="sk-...",
-        disabled=st.session_state["api_key"] != None,
+        disabled=st.session_state["api_key"] is not None,
     ).strip()
 
     if api_key:
@@ -195,8 +195,8 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 
-if (st.session_state["api_key_check"] == True) and (
-    st.session_state["api_key"] != None
+if (st.session_state["api_key_check"] is True) and (
+    st.session_state["api_key"] is not None
 ):
     if file:
         retriever = embed_file(file)
