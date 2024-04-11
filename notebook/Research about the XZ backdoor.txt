@@ -1,0 +1,14 @@
+### XZ Backdoor Research:
+
+#### Summary:
+Malicious code was added to xz Utils versions 5.6.0 and 5.6.1, creating a backdoor that manipulated sshd, the executable file used for remote access. This vulnerability, identified as CVE-2024-3094 with a CVSS score of 10, resulted from a software supply chain compromise. The U.S. Cybersecurity and Infrastructure Security Agency (CISA) recommended organizations to downgrade to a previous non-compromised version of XZ Utils.
+
+#### Remediation Steps:
+1. Immediately downgrade xz to an earlier version (5.4.6 is the latest unaffected version in most distributions).
+2. After downgrading xz, reboot the machine or restart the OpenSSH server to remove the patched code from memory (e.g., `sudo systemctl restart ssh`).
+
+#### Recommendation:
+Check the XZ version carefully, as versions 5.6.0 and 5.6.1 contain the backdoor. It is advised to revert to a previous known safe version of XZ Utils, such as 5.4.
+
+#### Source:
+The information was sourced from a search result regarding the XZ backdoor.
