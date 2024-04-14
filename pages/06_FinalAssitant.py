@@ -52,6 +52,9 @@ if "api_key_check" not in st.session_state:
 if "openai_model" not in st.session_state:
     st.session_state["openai_model"] = "선택해주세요"
 
+if "assistant" not in st.session_state:
+    st.session_state["assistant"] = ""
+
 API_KEY_pattern = r"sk-.*"
 
 Model_pattern = r"gpt-*"
@@ -59,34 +62,86 @@ Model_pattern = r"gpt-*"
 openai_models = ["선택해주세요", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]
 
 
-def save_api_key(api_key):
-    st.session_state["api_key"] = api_key
-    st.session_state["api_key_check"] = True
+class api_key_and_model:
+    def __init__(self):
+        pass
+
+    def save_api_key(self,api_key):
+        st.session_state["api_key"] = api_key
+        st.session_state["api_key_check"] = True
 
 
-def save_openai_model(openai_model):
-    st.session_state["openai_model"] = openai_model
-    st.session_state["openai_model_check"] = True
+    def save_openai_model(self,openai_model):
+        st.session_state["openai_model"] = openai_model
+        st.session_state["openai_model_check"] = True
 
 
-# def save_message(message, role):
-#     st.session_state["messages"].append({"message": message, "role": role})
+class chat_message:
+    def __init__(self):
+        pass
+
+    def save_message(message, role):
+        st.session_state["messages"].append({"message": message, "role": role})
 
 
-# def send_message(message, role, save=True):
-#     with st.chat_message(role):
-#         st.markdown(message)
-#     if save:
-#         save_message(message, role)
+    def send_message(self,message, role, save=True):
+        with st.chat_message(role):
+            st.markdown(message)
+
+        if save:
+            self.save_message(message, role)
 
 
-# def paint_history():
-#     for message in st.session_state["messages"]:
-#         send_message(
-#             message["message"],
-#             message["role"],
-#             save=False,
-#         )
+    def paint_history(self):
+        for message in st.session_state["messages"]:
+            self.send_message(
+                message["message"],
+                message["role"],
+                save=False,
+            )
+
+def get_run(run_id, thread_id):
+    return client.beta.threads.runs.retrieve(
+        run_id=run_id,
+        thread_id=thread_id,
+    )
+
+def send_message(thread_id, content):
+    return client.beta.threads.messages.create(
+        thread_id=thread_id, role="user", content=content
+    )
+
+def get_messages(thread_id):
+    messages = client.beta.threads.messages.list(thread_id=thread_id)
+    messages = list(messages)
+    messages.reverse()
+    for message in messages:
+        print(f"{message.role}: {message.content[0].text.value}")
+
+def get_tool_outputs(run_id, thread_id):
+    run = get_run(run_id, thread_id)
+    outputs = []
+    for action in run.required_action.submit_tool_outputs.tool_calls:
+        action_id = action.id
+        function = action.function
+        print(f"Calling function: {function.name} with arg {function.arguments}")
+        outputs.append(
+            {
+                "output": functions_map[function.name](json.loads(function.arguments)),
+                "tool_call_id": action_id,
+            }
+        )
+    return outputs
+
+
+def submit_tool_outputs(run_id, thread_id):
+    outpus = get_tool_outputs(run_id, thread_id)
+    return client.beta.threads.runs.submit_tool_outputs(
+        run_id=run_id,
+        thread_id=thread_id,
+        tool_outputs=outpus,
+    )
+
 
 with st.sidebar:
     api_key = st.text_input(
@@ -96,13 +151,13 @@ with st.sidebar:
     ).strip()
 
     if api_key:
-        save_api_key(api_key)
+        api_key_and_model.save_api_key(api_key)
         st.write("😄API_KEY가 저장되었습니다.😄")
 
     button = st.button("저장")
 
     if button:
-        save_api_key(api_key)
+        api_key_and_model.save_api_key(api_key)
         if api_key == "":
             st.warning("OPENAI_API_KEY를 넣어주세요.")
 
@@ -114,7 +169,7 @@ with st.sidebar:
     )
     if openai_model != "선택해주세요":
         if re.match(Model_pattern, openai_model):
-            save_openai_model(openai_model)
+            api_key_and_model.save_openai_model(openai_model)
             st.write("😄모델이 선택되었습니다.😄")
 
     st.write(
@@ -216,102 +271,51 @@ if not api_key:
 if openai_model == "선택해주세요":
     st.warning("Please write down a **:blue[OpenAI Model Select]** on the sidebar.")
 
-if api_key and openai_model != "선택해주세요":
-    assistant = client.beta.assistants.create(
-        name="Super Search Assistant",
-        instructions="""
-        0. 당신은 user의 Research Assistant 입니다.
-        1. query 에 대해서 검색하고
-        2. 검색 결과 목록에 website url 목록이 있으면, 각각의 website 내용을 text로 추출해줘.  
-
-        """,
-        model=st.session_state["openai_model"],
-        tools=functions,
+@st.cache_resource(show_spinner="Loading...")
+def create_thread(message_content):
+    return client.beta.threads.create(
+        messages=[
+            {
+                "role": "user",
+                "content": message_content,
+            }
+        ]
     )
 
-    assistant_id = assistant.id
-    st.write(assistant_id)
-
-    @st.cache_resource(show_spinner="Loading...")
-    def create_thread(message_content):
-        return client.beta.threads.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": message_content,
-                }
-            ]
-        )
-
-    thread = create_thread("Research about the XZ backdoor")
-    thread_id = thread.id
-    st.write(thread_id)
-
-    def create_run(thread_id, assistant_id):
-        return client.beta.threads.runs.create(
-            thread_id=thread_id,
-            assistant_id=assistant_id,
-        )
-
-    run = create_run(thread_id, assistant_id)
-    run_id = run.id
-    st.write(run_id)
-
-    def get_run(run_id, thread_id):
-        return client.beta.threads.runs.retrieve(
-            run_id=run_id,
-            thread_id=thread_id,
-        )
+def create_run(thread_id, assistant_id):
+    return client.beta.threads.runs.create(
+        thread_id=thread_id,
+        assistant_id=assistant_id,
+    )
 
 
-    def send_message(thread_id, content):
-        return client.beta.threads.messages.create(
-            thread_id=thread_id, role="user", content=content
-        )
 
+if api_key and openai_model != "선택해주세요":
+    if st.session_state["assistant"] == "": 
+        C_A = st.button("Create Assistant")
+        if C_A:
+            st.session_state["assistant"] = client.beta.assistants.create(
+                name="Super Search Assistant",
+                instructions="""
+                0. 당신은 user의 Research Assistant 입니다.
+                1. query 에 대해서 검색하고
+                2. 검색 결과 목록에 website url 목록이 있으면, 각각의 website 내용을 text로 추출해줘.  
 
-    def get_messages(thread_id):
-        messages = client.beta.threads.messages.list(thread_id=thread_id)
-        messages = list(messages)
-        messages.reverse()
-        for message in messages:
-            print(f"{message.role}: {message.content[0].text.value}")
-
-
-    def get_tool_outputs(run_id, thread_id):
-        run = get_run(run_id, thread_id)
-        outputs = []
-        for action in run.required_action.submit_tool_outputs.tool_calls:
-            action_id = action.id
-            function = action.function
-            print(f"Calling function: {function.name} with arg {function.arguments}")
-            outputs.append(
-                {
-                    "output": functions_map[function.name](json.loads(function.arguments)),
-                    "tool_call_id": action_id,
-                }
+                """,
+                model=st.session_state["openai_model"],
+                tools=functions,
             )
-        return outputs
+
+            st.write(st.session_state["assistant"])
+
+        message_content = "Research about the XZ backdoor"
+        R_A = st.button("Reset Assistant")
+        if R_A:
+            st.session_state["assistant"] = ""
+            st.session_state["messages"] = []
 
 
-    def submit_tool_outputs(run_id, thread_id):
-        outpus = get_tool_outputs(run_id, thread_id)
-        return client.beta.threads.runs.submit_tool_outputs(
-            run_id=run_id,
-            thread_id=thread_id,
-            tool_outputs=outpus,
-        )
 
-
-    get_tool_outputs(run_id, thread_id)
-
-    submit_tool_outputs(run_id, thread_id)
-
-    running = get_run(run_id, thread_id).status
-
-    while running == "completed":
-        running = get_run(run_id, thread_id).status
-        st.write(running)
 
 
 # if (st.session_state["api_key_check"] is True) and (
