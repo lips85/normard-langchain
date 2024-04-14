@@ -19,7 +19,7 @@ import streamlit as st
 from langchain_community.utilities.duckduckgo_search import DuckDuckGoSearchAPIWrapper
 from langchain_community.utilities.wikipedia import WikipediaAPIWrapper
 from langchain_community.document_loaders.web_base import WebBaseLoader
-from openai import OpenAI as client
+import openai as client
 
 
 # 클라우드페어 공식문서 사이트맵?
@@ -210,109 +210,108 @@ functions = [
     },
 ]
 
-
-
-assistant = client.beta.assistants.create(
-    name="Super Search Assistant",
-    instructions="""
-    0. 당신은 user의 Research Assistant 입니다.
-    1. query 에 대해서 검색하고
-    2. 검색 결과 목록에 website url 목록이 있으면, 각각의 website 내용을 text로 추출해줘.  
-
-    """,
-    model=st.session_state["openai_model"],
-    tools=functions,
-)
-
-assistant_id = assistant.id
-
-@st.cache_resource(show_spinner="Loading...")
-def create_thread(message_content):
-    return client.beta.threads.create(
-        messages=[
-            {
-                "role": "user",
-                "content": message_content,
-            }
-        ]
-    )
-
-thread = create_thread("Research about the XZ backdoor")
-thread_id = thread.id
-
-@st.cache_resource(show_spinner="Loading...")
-def create_run(thread_id, assistant_id):
-    return client.beta.threads.runs.create(
-        thread_id=thread_id,
-        assistant_id=assistant_id,
-    )
-
-run = create_run(thread_id, assistant_id)
-run_id = run.id
-
-
-def get_run(run_id, thread_id):
-    return client.beta.threads.runs.retrieve(
-        run_id=run_id,
-        thread_id=thread_id,
-    )
-
-
-def send_message(thread_id, content):
-    return client.beta.threads.messages.create(
-        thread_id=thread_id, role="user", content=content
-    )
-
-
-def get_messages(thread_id):
-    messages = client.beta.threads.messages.list(thread_id=thread_id)
-    messages = list(messages)
-    messages.reverse()
-    for message in messages:
-        print(f"{message.role}: {message.content[0].text.value}")
-
-
-def get_tool_outputs(run_id, thread_id):
-    run = get_run(run_id, thread_id)
-    outputs = []
-    for action in run.required_action.submit_tool_outputs.tool_calls:
-        action_id = action.id
-        function = action.function
-        print(f"Calling function: {function.name} with arg {function.arguments}")
-        outputs.append(
-            {
-                "output": functions_map[function.name](json.loads(function.arguments)),
-                "tool_call_id": action_id,
-            }
-        )
-    return outputs
-
-
-def submit_tool_outputs(run_id, thread_id):
-    outpus = get_tool_outputs(run_id, thread_id)
-    return client.beta.threads.runs.submit_tool_outputs(
-        run_id=run_id,
-        thread_id=thread_id,
-        tool_outputs=outpus,
-    )
-
-
-get_tool_outputs(run_id, thread_id)
-
 if not api_key:
     st.warning("Please provide an **:blue[OpenAI API Key]** on the sidebar.")
 
 if openai_model == "선택해주세요":
     st.warning("Please write down a **:blue[OpenAI Model Select]** on the sidebar.")
 
+if api_key and openai_model != "선택해주세요":
+    assistant = client.beta.assistants.create(
+        name="Super Search Assistant",
+        instructions="""
+        0. 당신은 user의 Research Assistant 입니다.
+        1. query 에 대해서 검색하고
+        2. 검색 결과 목록에 website url 목록이 있으면, 각각의 website 내용을 text로 추출해줘.  
 
-submit_tool_outputs(run_id, thread_id)
+        """,
+        model=st.session_state["openai_model"],
+        tools=functions,
+    )
 
-running = get_run(run_id, thread_id).status
+    assistant_id = assistant.id
+    st.write(assistant_id)
 
-while running == "completed":
+    @st.cache_resource(show_spinner="Loading...")
+    def create_thread(message_content):
+        return client.beta.threads.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": message_content,
+                }
+            ]
+        )
+
+    thread = create_thread("Research about the XZ backdoor")
+    thread_id = thread.id
+    st.write(thread_id)
+
+    def create_run(thread_id, assistant_id):
+        return client.beta.threads.runs.create(
+            thread_id=thread_id,
+            assistant_id=assistant_id,
+        )
+
+    run = create_run(thread_id, assistant_id)
+    run_id = run.id
+    st.write(run_id)
+
+    def get_run(run_id, thread_id):
+        return client.beta.threads.runs.retrieve(
+            run_id=run_id,
+            thread_id=thread_id,
+        )
+
+
+    def send_message(thread_id, content):
+        return client.beta.threads.messages.create(
+            thread_id=thread_id, role="user", content=content
+        )
+
+
+    def get_messages(thread_id):
+        messages = client.beta.threads.messages.list(thread_id=thread_id)
+        messages = list(messages)
+        messages.reverse()
+        for message in messages:
+            print(f"{message.role}: {message.content[0].text.value}")
+
+
+    def get_tool_outputs(run_id, thread_id):
+        run = get_run(run_id, thread_id)
+        outputs = []
+        for action in run.required_action.submit_tool_outputs.tool_calls:
+            action_id = action.id
+            function = action.function
+            print(f"Calling function: {function.name} with arg {function.arguments}")
+            outputs.append(
+                {
+                    "output": functions_map[function.name](json.loads(function.arguments)),
+                    "tool_call_id": action_id,
+                }
+            )
+        return outputs
+
+
+    def submit_tool_outputs(run_id, thread_id):
+        outpus = get_tool_outputs(run_id, thread_id)
+        return client.beta.threads.runs.submit_tool_outputs(
+            run_id=run_id,
+            thread_id=thread_id,
+            tool_outputs=outpus,
+        )
+
+
+    get_tool_outputs(run_id, thread_id)
+
+    submit_tool_outputs(run_id, thread_id)
+
     running = get_run(run_id, thread_id).status
-    st.write(running)
+
+    while running == "completed":
+        running = get_run(run_id, thread_id).status
+        st.write(running)
 
 
 # if (st.session_state["api_key_check"] is True) and (
