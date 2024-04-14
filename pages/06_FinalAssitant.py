@@ -11,20 +11,16 @@
 # 유저가 자체 OpenAI API 키를 사용하도록 허용하고, st.sidebar 내부의 st.input에서 이를 로드합니다.
 # st.sidebar를 사용하여 Streamlit app 의 코드과 함께 깃허브 리포지토리에 링크를 넣습니다.
 
-
+from datetime import datetime
 import re
 import os
+import json
 import streamlit as st
-from langchain.document_loaders.sitemap import SitemapLoader
-from langchain_core.runnables import RunnableLambda, RunnablePassthrough
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores.faiss import FAISS
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.callbacks import BaseCallbackHandler
-from langchain.embeddings.cache import CacheBackedEmbeddings
-from langchain.storage import LocalFileStore
-from langchain.memory.buffer import ConversationBufferMemory
+from langchain_community.utilities.duckduckgo_search import DuckDuckGoSearchAPIWrapper
+from langchain_community.utilities.wikipedia import WikipediaAPIWrapper
+from langchain_community.document_loaders.web_base import WebBaseLoader
+from openai import OpenAI as client
+
 
 # 클라우드페어 공식문서 사이트맵?
 # https://developers.cloudflare.com/sitemap.xml
@@ -63,20 +59,6 @@ Model_pattern = r"gpt-*"
 openai_models = ["선택해주세요", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]
 
 
-class ChatCallbackHandler(BaseCallbackHandler):
-    message = ""
-
-    def on_llm_start(self, *args, **kwargs):
-        self.message_box = st.empty()
-
-    def on_llm_end(self, *args, **kwargs):
-        save_message(self.message, "ai")
-
-    def on_llm_new_token(self, token, *args, **kwargs):
-        self.message += token
-        self.message_box.markdown(self.message)
-
-
 def save_api_key(api_key):
     st.session_state["api_key"] = api_key
     st.session_state["api_key_check"] = True
@@ -87,190 +69,24 @@ def save_openai_model(openai_model):
     st.session_state["openai_model_check"] = True
 
 
-def save_message(message, role):
-    st.session_state["messages"].append({"message": message, "role": role})
+# def save_message(message, role):
+#     st.session_state["messages"].append({"message": message, "role": role})
 
 
-def send_message(message, role, save=True):
-    with st.chat_message(role):
-        st.markdown(message)
-    if save:
-        save_message(message, role)
+# def send_message(message, role, save=True):
+#     with st.chat_message(role):
+#         st.markdown(message)
+#     if save:
+#         save_message(message, role)
 
 
-def paint_history():
-    for message in st.session_state["messages"]:
-        send_message(
-            message["message"],
-            message["role"],
-            save=False,
-        )
-
-
-answers_prompt = ChatPromptTemplate.from_template(
-    """
-    Using ONLY the following context answer the user's question. If you can't just say you don't know, don't make anything up.
-
-    Then, give a score to the answer between 0 and 5.
-
-    If the answer answers the user question the score should be high, else it should be low.
-
-    Make sure to always include the answer's score even if it's 0.
-
-    Context: {context}
-
-    Examples:
-
-    Question: How far away is the moon?
-    Answer: The moon is 384,400 km away.
-    Score: 5
-
-    Question: How far away is the sun?
-    Answer: I don't know
-    Score: 0
-
-    Your turn!
-
-    Question: {question}
-
-"""
-)
-
-
-def get_answers(inputs):
-    docs = inputs["docs"]
-    question = inputs["question"]
-    history = inputs["history"]
-    answers_chain = answers_prompt | llm
-    # answers = []
-    # for doc in docs:
-    #     result = answers_chain.invoke(
-    #         {"question": question, "context": doc.page_content}
-    #     )
-    #     answers.append(result.content)
-    return {
-        "question": question,
-        "answers": [
-            {
-                "answer": answers_chain.invoke(
-                    {"question": question, "context": doc.page_content}
-                ).content,
-                "source": doc.metadata["source"],
-                "date": doc.metadata["lastmod"],
-            }
-            for doc in docs
-        ],
-        "history": history,
-    }
-
-
-choose_prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """
-            Use ONLY the following pre-existing answers to answer the user's question.
-
-            Use the answers that have the highest score (more helpful) and favor the most recent ones.
-
-            Cite sources and return the sources of the answers as they are, do not change them.
-
-            Answers: {answers}
-            """,
-        ),
-        MessagesPlaceholder(variable_name="history"),
-        ("human", "{question}"),
-    ]
-)
-
-
-def choose_answer(inputs):
-    answers = inputs["answers"]
-    question = inputs["question"]
-    history = inputs["history"]
-    choose_chain = choose_prompt | llm_for_last
-    condensed = "\n\n".join(
-        f"{answer['answer']}\nSource:{answer['source']}\nDate:{answer['date']}\n"
-        for answer in answers
-    )
-    return choose_chain.invoke(
-        {
-            "question": question,
-            "answers": condensed,
-            "history": history,
-        }
-    )
-
-
-def parse_page(soup):
-    header = soup.find("header")
-    footer = soup.find("footer")
-    if header:
-        header.decompose()
-    if footer:
-        footer.decompose()
-    return (
-        str(soup.get_text())
-        .replace("\n", " ")
-        .replace("\xa0", " ")
-        .replace("CloseSearch Submit Blog", "")
-    )
-
-
-def load_memory(_):
-    return memory.load_memory_variables({})["history"]
-
-
-llm_for_last = ChatOpenAI(
-    temperature=0.1,
-    streaming=True,
-    callbacks={
-        ChatCallbackHandler(),
-    },
-    model=st.session_state["openai_model"],
-    openai_api_key=st.session_state["api_key"],
-)
-llm = ChatOpenAI(
-    temperature=0.1,
-    model=st.session_state["openai_model"],
-    openai_api_key=st.session_state["api_key"],
-)
-
-memory = ConversationBufferMemory(
-    llm=llm,
-    max_token_limit=1000,
-    return_messages=True,
-    memory_key="history",
-)
-
-
-@st.cache_resource(show_spinner="Loading website...")
-def load_website(url):
-    os.makedirs("./.cache/sitemap", exist_ok=True)
-    cache_dir = LocalFileStore(f"./.cache/sitemap/embeddings/{url_name}")
-    splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
-        chunk_size=1000,
-        chunk_overlap=200,
-    )
-    loader = SitemapLoader(
-        url,
-        parsing_function=parse_page,
-        filter_urls=[
-            r"https:\/\/developers.cloudflare.com/ai-gateway.*",
-            r"https:\/\/developers.cloudflare.com/vectorize.*",
-            r"https:\/\/developers.cloudflare.com/workers-ai.*",
-        ],
-    )
-    loader.requests_per_second = 50
-    docs = loader.load_and_split(text_splitter=splitter)
-    embeddings = OpenAIEmbeddings(
-        openai_api_key=st.session_state["api_key"],
-    )
-    cached_embeddings = CacheBackedEmbeddings.from_bytes_store(embeddings, cache_dir)
-    vectorstore = FAISS.from_documents(docs, cached_embeddings)
-    retriever = vectorstore.as_retriever()
-    return retriever
-
+# def paint_history():
+#     for message in st.session_state["messages"]:
+#         send_message(
+#             message["message"],
+#             message["role"],
+#             save=False,
+#         )
 
 with st.sidebar:
     api_key = st.text_input(
@@ -301,14 +117,6 @@ with st.sidebar:
             save_openai_model(openai_model)
             st.write("😄모델이 선택되었습니다.😄")
 
-    st.divider()
-    url = st.text_input(
-        "Write down a URL",
-        placeholder="https://example.com/sitemap.xml",
-    )
-
-    url_name = url.split("://")[1].replace("/", "_") if url else None
-
     st.write(
         """
 
@@ -316,14 +124,180 @@ with st.sidebar:
         Made by hary.
 
         Github
-        https://github.com/lips85/normard-langchain/blob/main/pages/04_SiteGPT.py
+        https://github.com/lips85/normard-langchain/blob/main/pages/06_FinalAssitant.py
 
         streamlit
-        https://nomad-fullstack-langchain-hary.streamlit.app/
+        https://nomad-fullstack-langchain-hary.streamlit.app/FinalAssitant
 
         """
     )
 
+def get_websites_by_wikipedia_search(inputs):
+    w = WikipediaAPIWrapper()
+    query = inputs["query"]
+    return w.run(query)
+
+
+def get_websites_by_duckduckgo_search(inputs):
+    ddg = DuckDuckGoSearchAPIWrapper()
+    query = inputs["query"]
+    return ddg.run(query)
+
+
+def get_document_text(inputs):
+    url = inputs["url"]
+    loader = WebBaseLoader([url])
+    docs = loader.load()
+    return docs[0].page_content
+
+functions_map = {
+    "get_websites_by_wikipedia_search": get_websites_by_wikipedia_search,
+    "get_websites_by_duckduckgo_search": get_websites_by_duckduckgo_search,
+    "get_document_text": get_document_text,
+}
+
+functions = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_websites_by_wikipedia_search",
+            "description": "Use this tool to find the websites for the given query.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The query you will search for. Example query: Research about the XZ backdoor",
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_websites_by_duckduckgo_search",
+            "description": "Use this tool to find the websites for the given query.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The query you will search for. Example query: Research about the XZ backdoor",
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_document_text",
+            "description": "Use this tool to load the website for the given url.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The url you will load. Example url: https://en.wikipedia.org/wiki/Backdoor_(computing)",
+                    }
+                },
+                "required": ["url"],
+            },
+        },
+    },
+]
+
+
+
+assistant = client.beta.assistants.create(
+    name="Super Search Assistant",
+    instructions="""
+    0. 당신은 user의 Research Assistant 입니다.
+    1. query 에 대해서 검색하고
+    2. 검색 결과 목록에 website url 목록이 있으면, 각각의 website 내용을 text로 추출해줘.  
+
+    """,
+    model=st.session_state["openai_model"],
+    tools=functions,
+)
+
+assistant_id = assistant.id
+
+@st.cache_resource(show_spinner="Loading...")
+def create_thread(message_content):
+    return client.beta.threads.create(
+        messages=[
+            {
+                "role": "user",
+                "content": message_content,
+            }
+        ]
+    )
+
+thread = create_thread("Research about the XZ backdoor")
+thread_id = thread.id
+
+@st.cache_resource(show_spinner="Loading...")
+def create_run(thread_id, assistant_id):
+    return client.beta.threads.runs.create(
+        thread_id=thread_id,
+        assistant_id=assistant_id,
+    )
+
+run = create_run(thread_id, assistant_id)
+run_id = run.id
+
+
+def get_run(run_id, thread_id):
+    return client.beta.threads.runs.retrieve(
+        run_id=run_id,
+        thread_id=thread_id,
+    )
+
+
+def send_message(thread_id, content):
+    return client.beta.threads.messages.create(
+        thread_id=thread_id, role="user", content=content
+    )
+
+
+def get_messages(thread_id):
+    messages = client.beta.threads.messages.list(thread_id=thread_id)
+    messages = list(messages)
+    messages.reverse()
+    for message in messages:
+        print(f"{message.role}: {message.content[0].text.value}")
+
+
+def get_tool_outputs(run_id, thread_id):
+    run = get_run(run_id, thread_id)
+    outputs = []
+    for action in run.required_action.submit_tool_outputs.tool_calls:
+        action_id = action.id
+        function = action.function
+        print(f"Calling function: {function.name} with arg {function.arguments}")
+        outputs.append(
+            {
+                "output": functions_map[function.name](json.loads(function.arguments)),
+                "tool_call_id": action_id,
+            }
+        )
+    return outputs
+
+
+def submit_tool_outputs(run_id, thread_id):
+    outpus = get_tool_outputs(run_id, thread_id)
+    return client.beta.threads.runs.submit_tool_outputs(
+        run_id=run_id,
+        thread_id=thread_id,
+        tool_outputs=outpus,
+    )
+
+
+get_tool_outputs(run_id, thread_id)
 
 if not api_key:
     st.warning("Please provide an **:blue[OpenAI API Key]** on the sidebar.")
@@ -331,55 +305,61 @@ if not api_key:
 if openai_model == "선택해주세요":
     st.warning("Please write down a **:blue[OpenAI Model Select]** on the sidebar.")
 
-if not url:
-    st.warning("Please write down a **:blue[Sitemap URL]** on the sidebar.")
+
+submit_tool_outputs(run_id, thread_id)
+
+running = get_run(run_id, thread_id).status
+
+while running == "completed":
+    running = get_run(run_id, thread_id).status
+    st.write(running)
 
 
-if (st.session_state["api_key_check"] is True) and (
-    st.session_state["api_key"] is not None
-):
-    if url:
-        if ".xml" not in url:
-            with st.sidebar:
-                st.error("Please write down a Sitemap URL.")
-        else:
-            retriever = load_website(url)
-            send_message("I'm ready! Ask away!", "ai", save=False)
-            paint_history()
-            message = st.chat_input("Ask a question to the website.")
-            if message:
-                if re.match(API_KEY_pattern, st.session_state["api_key"]) and re.match(
-                    Model_pattern, st.session_state["openai_model"]
-                ):
-                    send_message(message, "human")
-                    try:
-                        chain = (
-                            {
-                                "docs": retriever,
-                                "question": RunnablePassthrough(),
-                                "history": RunnableLambda(load_memory),
-                            }
-                            | RunnableLambda(get_answers)
-                            | RunnableLambda(choose_answer)
-                        )
+# if (st.session_state["api_key_check"] is True) and (
+#     st.session_state["api_key"] is not None
+# ):
+#     if url:
+#         if ".xml" not in url:
+#             with st.sidebar:
+#                 st.error("Please write down a Sitemap URL.")
+#         else:
+#             retriever = load_website(url)
+#             send_message("I'm ready! Ask away!", "ai", save=False)
+#             paint_history()
+#             message = st.chat_input("Ask a question to the website.")
+#             if message:
+#                 if re.match(API_KEY_pattern, st.session_state["api_key"]) and re.match(
+#                     Model_pattern, st.session_state["openai_model"]
+#                 ):
+#                     send_message(message, "human")
+#                     try:
+#                         chain = (
+#                             {
+#                                 "docs": retriever,
+#                                 "question": RunnablePassthrough(),
+#                                 "history": RunnableLambda(load_memory),
+#                             }
+#                             | RunnableLambda(get_answers)
+#                             | RunnableLambda(choose_answer)
+#                         )
 
-                        def invoke_chain(question):
-                            result = chain.invoke(question).content
-                            memory.save_context(
-                                {"input": question},
-                                {"output": result},
-                            )
-                            return result
+#                         def invoke_chain(question):
+#                             result = chain.invoke(question).content
+#                             memory.save_context(
+#                                 {"input": question},
+#                                 {"output": result},
+#                             )
+#                             return result
 
-                        with st.chat_message("ai"):
-                            invoke_chain(message)
+#                         with st.chat_message("ai"):
+#                             invoke_chain(message)
 
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}")
-                        st.warning("OPENAI_API_KEY or 모델 선택을 다시 진행해주세요.")
+#                     except Exception as e:
+#                         st.error(f"An error occurred: {e}")
+#                         st.warning("OPENAI_API_KEY or 모델 선택을 다시 진행해주세요.")
 
-                else:
-                    message = "OPENAI_API_KEY or 모델 선택이 잘못되었습니다. 사이드바를 다시 확인하세요."
-                    send_message(message, "ai")
-    else:
-        st.session_state["messages"] = []
+#                 else:
+#                     message = "OPENAI_API_KEY or 모델 선택이 잘못되었습니다. 사이드바를 다시 확인하세요."
+#                     send_message(message, "ai")
+#     else:
+#         st.session_state["messages"] = []
