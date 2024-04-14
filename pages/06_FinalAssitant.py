@@ -11,16 +11,14 @@
 # 유저가 자체 OpenAI API 키를 사용하도록 허용하고, st.sidebar 내부의 st.input에서 이를 로드합니다.
 # st.sidebar를 사용하여 Streamlit app 의 코드과 함께 깃허브 리포지토리에 링크를 넣습니다.
 
-from datetime import datetime
 import re
-import os
 import time
 import json
 import streamlit as st
 from langchain_community.utilities.duckduckgo_search import DuckDuckGoSearchAPIWrapper
 from langchain_community.utilities.wikipedia import WikipediaAPIWrapper
 from langchain_community.document_loaders.web_base import WebBaseLoader
-from openai import OpenAI, AuthenticationError
+from openai import OpenAI
 
 # 클라우드페어 공식문서 사이트맵?
 # https://developers.cloudflare.com/sitemap.xml
@@ -97,6 +95,7 @@ class DiscussionClient:
         for message in st.session_state["messages"]:
             self.send_message(message["message"], message["role"], save=False)
 
+
 class ThreadClient:
     def __init__(self, client):
         self.client = client
@@ -146,7 +145,7 @@ class ThreadClient:
             run = self.get_run(run.id, thread.id)
             time.sleep(0.5)
         return run
-
+    
 class IssueSearchClient:
 
     def __init__(self):
@@ -156,13 +155,13 @@ class IssueSearchClient:
 
     def get_websites_by_wikipedia_search(self,inputs):
         self.w = WikipediaAPIWrapper()
-        query = inputs["message"]
+        query = inputs["query"]
         return self.w.run(query)
 
 
     def get_websites_by_duckduckgo_search(self, inputs):
         self.ddg = DuckDuckGoSearchAPIWrapper()
-        query = inputs["message"]
+        query = inputs["query"]
         return self.ddg.run(query)
 
 
@@ -293,23 +292,26 @@ if api_key and (openai_model != "선택해주세요"):
 
     assistant_id = "asst_kV62UlOmxZsV9WcJE3Npy8t1"
 
-    discussion_client.send_message("I'm ready! Ask away!", "ai", save=False)
+    discussion_client.send_message("무엇이든 물어보세요!", "ai", save=False)
     discussion_client.paint_history()
-    message = st.chat_input("Ask a question to the website.")
-    if message:
+    query = st.chat_input("Ask a question to the website.")
+    if query:
+        st.session_state["query"] = query
+        discussion_client.send_message(query, "human")
         thread = client.beta.threads.create(
             messages=[
                 {
                     "role": "user",
-                    "content": f"{message}",
+                    "content": f"{query}",
                 }
             ]
         )
-
+        thread_id=thread.id
         run = client.beta.threads.runs.create(
-            thread_id=thread.id,
+            thread_id=thread_id,
             assistant_id=assistant_id,
         )
+        run_id = run.id
 
         assistant = ThreadClient(client)
         run = assistant.wait_on_run(run, thread)
@@ -317,8 +319,8 @@ if api_key and (openai_model != "선택해주세요"):
         if run:
             discussion_client.send_message("이슈를 찾고 있어요!", "ai", save=False)
             discussion_client.paint_history()
-            assistant.get_messages(thread.id)
-            assistant.submit_tool_outputs(run.id, thread.id)
+            assistant.get_tool_outputs(run_id, thread_id)
+            assistant.submit_tool_outputs(run_id, thread_id)
             st.download_button(
                 label="채팅 내역 다운로드",
                 data=json.dumps(st.session_state["messages"]),
@@ -328,3 +330,39 @@ if api_key and (openai_model != "선택해주세요"):
 
     else:
         st.session_state["messages"] = []
+
+
+        # assistant.get_tool_outputs(run_id, thread_id)
+    ##########################################################
+        # is_new_result = False
+
+        # with st.chat_message("ai"):
+        #     with st.status(":red[Polling Run Status...]") as status:
+
+        #         try:
+        #             while True:
+
+        #                 if assistant.get_run(run_id, thread_id).status == "completed":
+        #                     is_new_result = True
+        #                     status.update(label=f"Running: {assistant.get_run(run_id, thread_id).status}", state="complete")
+        #                     break
+        #                 if assistant.get_run(run_id, thread_id).status == "requires_action":
+        #                     status.update(label=f"Running: {assistant.get_run(run_id, thread_id).status}", state="running")
+        #                     assistant.submit_tool_outputs(run_id, thread_id)
+
+        #         except Exception as e:
+        #             st.error(f"Error: {e}")
+
+        # if is_new_result:
+        #     result = assistant.get_messages(thread_id)
+        #     discussion_client.send_message(result, "ai")
+        #     st.download_button(
+        #         label="채팅 내역 다운로드",
+        #         data=json.dumps(st.session_state["messages"]),
+        #         file_name="chat_history.txt",
+        #         mime="text/plain",
+        #     )
+        #     st.rerun()
+
+
+        ####################################
