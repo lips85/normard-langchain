@@ -14,13 +14,13 @@
 from datetime import datetime
 import re
 import os
+import time
 import json
 import streamlit as st
 from langchain_community.utilities.duckduckgo_search import DuckDuckGoSearchAPIWrapper
 from langchain_community.utilities.wikipedia import WikipediaAPIWrapper
 from langchain_community.document_loaders.web_base import WebBaseLoader
-import openai as client
-
+from openai import OpenAI, AuthenticationError
 
 # 클라우드페어 공식문서 사이트맵?
 # https://developers.cloudflare.com/sitemap.xml
@@ -62,153 +62,123 @@ Model_pattern = r"gpt-*"
 openai_models = ["선택해주세요", "gpt-3.5-turbo-0125", "gpt-4-0125-preview"]
 
 
-class api_key_and_model:
+
+# class가 안됨 ㅠㅠ 왜인지 모르것음 self를 빼야 돌아감...
+# class api_key_and_model:
+#     def __init__(self):
+#         pass
+
+def save_api_key(api_key):
+    st.session_state["api_key"] = api_key
+    st.session_state["api_key_check"] = True
+
+
+def save_openai_model(openai_model):
+    st.session_state["openai_model"] = openai_model
+    st.session_state["openai_model_check"] = True
+
+
+class DiscussionClient:
+
     def __init__(self):
         pass
 
-    def save_api_key(self,api_key):
-        st.session_state["api_key"] = api_key
-        st.session_state["api_key_check"] = True
-
-
-    def save_openai_model(self,openai_model):
-        st.session_state["openai_model"] = openai_model
-        st.session_state["openai_model_check"] = True
-
-
-class chat_message:
-    def __init__(self):
-        pass
-
-    def save_message(message, role):
+    def save_message(self, message, role):
         st.session_state["messages"].append({"message": message, "role": role})
 
-
-    def send_message(self,message, role, save=True):
+    def send_message(self, message, role, save=True):
         with st.chat_message(role):
             st.markdown(message)
 
         if save:
             self.save_message(message, role)
 
-
     def paint_history(self):
         for message in st.session_state["messages"]:
-            self.send_message(
-                message["message"],
-                message["role"],
-                save=False,
-            )
+            self.send_message(message["message"], message["role"], save=False)
 
-def get_run(run_id, thread_id):
-    return client.beta.threads.runs.retrieve(
-        run_id=run_id,
-        thread_id=thread_id,
-    )
+class ThreadClient:
+    def __init__(self, client):
+        self.client = client
 
-def send_message(thread_id, content):
-    return client.beta.threads.messages.create(
-        thread_id=thread_id, role="user", content=content
-    )
+    def get_run(self, run_id, thread_id):
+        return self.client.beta.threads.runs.retrieve(
+            run_id=run_id,
+            thread_id=thread_id,
+        )
 
-def get_messages(thread_id):
-    messages = client.beta.threads.messages.list(thread_id=thread_id)
-    messages = list(messages)
-    messages.reverse()
-    for message in messages:
-        print(f"{message.role}: {message.content[0].text.value}")
+    def send_message(self, thread_id, content):
+        return self.client.beta.threads.messages.create(
+            thread_id=thread_id, role="user", content=content
+        )
 
-def get_tool_outputs(run_id, thread_id):
-    run = get_run(run_id, thread_id)
-    outputs = []
-    for action in run.required_action.submit_tool_outputs.tool_calls:
-        action_id = action.id
-        function = action.function
-        print(f"Calling function: {function.name} with arg {function.arguments}")
-        outputs.append(
-            {
+    def get_messages(self, thread_id):
+        messages = self.client.beta.threads.messages.list(thread_id=thread_id)
+        messages = list(messages)
+        messages.reverse()
+        for message in messages:
+            if message.role == "user":
+                discussion_client.send_message(message.content[0].text.value, "user")
+
+    def get_tool_outputs(self, run_id, thread_id):
+        run = self.get_run(run_id, thread_id)
+        outputs = []
+        for action in run.required_action.submit_tool_outputs.tool_calls:
+            action_id = action.id
+            function = action.function
+            outputs.append({
                 "output": functions_map[function.name](json.loads(function.arguments)),
                 "tool_call_id": action_id,
-            }
+            })
+        return outputs
+
+    def submit_tool_outputs(self, run_id, thread_id):
+        outputs = self.get_tool_outputs(run_id, thread_id)
+        discussion_client.send_message("이슈를 찾았어요!", "ai")
+        discussion_client.send_message(outputs[0]["output"], "ai")
+
+        return self.client.beta.threads.runs.submit_tool_outputs(
+            run_id=run_id, thread_id=thread_id, tool_outputs=outputs,
         )
-    return outputs
+
+    def wait_on_run(self, run, thread):
+        while run.status == "queued" or run.status == "in_progress":
+            run = self.get_run(run.id, thread.id)
+            time.sleep(0.5)
+        return run
+
+class IssueSearchClient:
+
+    def __init__(self):
+        self.ddg = DuckDuckGoSearchAPIWrapper()
+        self.w = WikipediaAPIWrapper()
+        self.loader = WebBaseLoader()
+
+    def get_websites_by_wikipedia_search(self,inputs):
+        self.w = WikipediaAPIWrapper()
+        query = inputs["message"]
+        return self.w.run(query)
 
 
-def submit_tool_outputs(run_id, thread_id):
-    outpus = get_tool_outputs(run_id, thread_id)
-    return client.beta.threads.runs.submit_tool_outputs(
-        run_id=run_id,
-        thread_id=thread_id,
-        tool_outputs=outpus,
-    )
+    def get_websites_by_duckduckgo_search(self, inputs):
+        self.ddg = DuckDuckGoSearchAPIWrapper()
+        query = inputs["message"]
+        return self.ddg.run(query)
 
 
-with st.sidebar:
-    api_key = st.text_input(
-        "API_KEY 입력",
-        placeholder="sk-...",
-        disabled=st.session_state["api_key"] is not None,
-    ).strip()
-
-    if api_key:
-        api_key_and_model.save_api_key(api_key)
-        st.write("😄API_KEY가 저장되었습니다.😄")
-
-    button = st.button("저장")
-
-    if button:
-        api_key_and_model.save_api_key(api_key)
-        if api_key == "":
-            st.warning("OPENAI_API_KEY를 넣어주세요.")
-
-    st.divider()
-
-    openai_model = st.selectbox(
-        "OpneAI Model을 골라주세요.",
-        options=openai_models,
-    )
-    if openai_model != "선택해주세요":
-        if re.match(Model_pattern, openai_model):
-            api_key_and_model.save_openai_model(openai_model)
-            st.write("😄모델이 선택되었습니다.😄")
-
-    st.write(
-        """
-
-
-        Made by hary.
-
-        Github
-        https://github.com/lips85/normard-langchain/blob/main/pages/06_FinalAssitant.py
-
-        streamlit
-        https://nomad-fullstack-langchain-hary.streamlit.app/FinalAssitant
-
-        """
-    )
-
-def get_websites_by_wikipedia_search(inputs):
-    w = WikipediaAPIWrapper()
-    query = inputs["query"]
-    return w.run(query)
-
-
-def get_websites_by_duckduckgo_search(inputs):
-    ddg = DuckDuckGoSearchAPIWrapper()
-    query = inputs["query"]
-    return ddg.run(query)
-
-
-def get_document_text(inputs):
-    url = inputs["url"]
-    loader = WebBaseLoader([url])
-    docs = loader.load()
-    return docs[0].page_content
+    def get_document_text(self, inputs):
+        url = inputs["url"]
+        self.loader = WebBaseLoader([url])
+        self.docs = self.loader.load()
+        return self.docs[0].page_content
+    
+issue_search_client = IssueSearchClient()
+discussion_client = DiscussionClient()
 
 functions_map = {
-    "get_websites_by_wikipedia_search": get_websites_by_wikipedia_search,
-    "get_websites_by_duckduckgo_search": get_websites_by_duckduckgo_search,
-    "get_document_text": get_document_text,
+    "get_websites_by_wikipedia_search": issue_search_client.get_websites_by_wikipedia_search,
+    "get_websites_by_duckduckgo_search": issue_search_client.get_websites_by_duckduckgo_search,
+    "get_document_text": issue_search_client.get_document_text,
 }
 
 functions = [
@@ -263,7 +233,53 @@ functions = [
             },
         },
     },
-]
+]    
+
+with st.sidebar:
+    api_key = st.text_input(
+        "API_KEY 입력",
+        placeholder="sk-...",
+        disabled=st.session_state["api_key"] is not None,
+    ).strip()
+
+    if api_key:
+        save_api_key(api_key=api_key)
+        st.write("😄API_KEY가 저장되었습니다.😄")
+
+    button = st.button("저장")
+
+    if button:
+        save_api_key(api_key=api_key)
+        if api_key == "":
+            st.warning("OPENAI_API_KEY를 넣어주세요.")
+
+    st.divider()
+
+    openai_model = st.selectbox(
+        "OpneAI Model을 골라주세요.",
+        options=openai_models,
+    )
+    if openai_model != "선택해주세요":
+        if re.match(Model_pattern, openai_model):
+            save_openai_model(openai_model=openai_model)
+            st.write("😄모델이 선택되었습니다.😄")
+
+    client = OpenAI(api_key=st.session_state["api_key"])
+
+    st.write(
+        """
+
+
+        Made by hary.
+
+        Github
+        https://github.com/lips85/normard-langchain/blob/main/pages/06_FinalAssitant.py
+
+        streamlit
+        https://nomad-fullstack-langchain-hary.streamlit.app/FinalAssitant
+
+        """
+    )
 
 if not api_key:
     st.warning("Please provide an **:blue[OpenAI API Key]** on the sidebar.")
@@ -271,98 +287,44 @@ if not api_key:
 if openai_model == "선택해주세요":
     st.warning("Please write down a **:blue[OpenAI Model Select]** on the sidebar.")
 
-@st.cache_resource(show_spinner="Loading...")
-def create_thread(message_content):
-    return client.beta.threads.create(
-        messages=[
-            {
-                "role": "user",
-                "content": message_content,
-            }
-        ]
-    )
+if api_key and (openai_model != "선택해주세요"):
+    st.session_state["api_key"] = api_key
+    client = OpenAI(api_key=api_key)
 
-def create_run(thread_id, assistant_id):
-    return client.beta.threads.runs.create(
-        thread_id=thread_id,
-        assistant_id=assistant_id,
-    )
+    assistant_id = "asst_kV62UlOmxZsV9WcJE3Npy8t1"
 
+    discussion_client.send_message("I'm ready! Ask away!", "ai", save=False)
+    discussion_client.paint_history()
+    message = st.chat_input("Ask a question to the website.")
+    if message:
+        thread = client.beta.threads.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"{message}",
+                }
+            ]
+        )
 
+        run = client.beta.threads.runs.create(
+            thread_id=thread.id,
+            assistant_id=assistant_id,
+        )
 
-if api_key and openai_model != "선택해주세요":
-    if st.session_state["assistant"] == "": 
-        C_A = st.button("Create Assistant")
-        if C_A:
-            st.session_state["assistant"] = client.beta.assistants.create(
-                name="Super Search Assistant",
-                instructions="""
-                0. 당신은 user의 Research Assistant 입니다.
-                1. query 에 대해서 검색하고
-                2. 검색 결과 목록에 website url 목록이 있으면, 각각의 website 내용을 text로 추출해줘.  
+        assistant = ThreadClient(client)
+        run = assistant.wait_on_run(run, thread)
 
-                """,
-                model=st.session_state["openai_model"],
-                tools=functions,
+        if run:
+            discussion_client.send_message("이슈를 찾고 있어요!", "ai", save=False)
+            discussion_client.paint_history()
+            assistant.get_messages(thread.id)
+            assistant.submit_tool_outputs(run.id, thread.id)
+            st.download_button(
+                label="채팅 내역 다운로드",
+                data=json.dumps(st.session_state["messages"]),
+                file_name="chat_history.txt",
+                mime="text/plain",
             )
 
-            st.write(st.session_state["assistant"])
-
-        message_content = "Research about the XZ backdoor"
-        R_A = st.button("Reset Assistant")
-        if R_A:
-            st.session_state["assistant"] = ""
-            st.session_state["messages"] = []
-
-
-
-
-
-# if (st.session_state["api_key_check"] is True) and (
-#     st.session_state["api_key"] is not None
-# ):
-#     if url:
-#         if ".xml" not in url:
-#             with st.sidebar:
-#                 st.error("Please write down a Sitemap URL.")
-#         else:
-#             retriever = load_website(url)
-#             send_message("I'm ready! Ask away!", "ai", save=False)
-#             paint_history()
-#             message = st.chat_input("Ask a question to the website.")
-#             if message:
-#                 if re.match(API_KEY_pattern, st.session_state["api_key"]) and re.match(
-#                     Model_pattern, st.session_state["openai_model"]
-#                 ):
-#                     send_message(message, "human")
-#                     try:
-#                         chain = (
-#                             {
-#                                 "docs": retriever,
-#                                 "question": RunnablePassthrough(),
-#                                 "history": RunnableLambda(load_memory),
-#                             }
-#                             | RunnableLambda(get_answers)
-#                             | RunnableLambda(choose_answer)
-#                         )
-
-#                         def invoke_chain(question):
-#                             result = chain.invoke(question).content
-#                             memory.save_context(
-#                                 {"input": question},
-#                                 {"output": result},
-#                             )
-#                             return result
-
-#                         with st.chat_message("ai"):
-#                             invoke_chain(message)
-
-#                     except Exception as e:
-#                         st.error(f"An error occurred: {e}")
-#                         st.warning("OPENAI_API_KEY or 모델 선택을 다시 진행해주세요.")
-
-#                 else:
-#                     message = "OPENAI_API_KEY or 모델 선택이 잘못되었습니다. 사이드바를 다시 확인하세요."
-#                     send_message(message, "ai")
-#     else:
-#         st.session_state["messages"] = []
+    else:
+        st.session_state["messages"] = []
